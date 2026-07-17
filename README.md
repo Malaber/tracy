@@ -14,6 +14,7 @@ Germany-aware target hours.
 - German national and selectable state-wide public holidays
 - SQLite locally, with PostgreSQL support through SQLAlchemy
 - FastAPI, SQLAlchemy, Alembic, vanilla JavaScript, pytest, and Invoke
+- GitHub Actions releases with amd64/arm64 images on GHCR
 
 Authentication is intentionally not included yet. The API and data model are isolated so a shared
 authentication package can be added in front of the routes later.
@@ -32,6 +33,24 @@ Run all checks with:
 ```bash
 .venv/bin/inv verify
 ```
+
+## Deployment and releases
+
+Every pushed branch runs separate formatting, lint, Python, and JavaScript jobs. Successful commits
+publish an immutable multi-architecture image as `ghcr.io/malaber/tracy:sha-<commit>`.
+
+Successful `main` CI runs create the next patch release, publish matching version and `latest`
+container tags, and create a Git tag and GitHub Release. Deploy the current release with:
+
+```bash
+docker compose pull
+docker compose up -d
+```
+
+Deployment guides:
+
+- [Docker Compose](docs/deployment/docker-compose.md)
+- [Webhooker production and review deployments](docs/deployment/webhooker.md)
 
 ## Holiday coverage
 

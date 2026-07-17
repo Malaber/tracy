@@ -13,3 +13,12 @@ commands whenever an Invoke task exists.
 
 New calculation, API, or UI behavior should include focused automated coverage. Keep the local
 SQLite database out of version control and use a temporary database for tests.
+
+## Release workflow
+
+CI publishes tested commit images as `ghcr.io/malaber/tracy:sha-<commit>`. A successful `main` CI
+run promotes that exact image to the next patch version and `latest`, creates the GitHub Release,
+and wakes Webhooker when its repository settings are configured.
+
+Pull request descriptions may include `Release title: <title>`. The release workflow uses that
+value for the GitHub Release title; otherwise it uses the PR or commit title.

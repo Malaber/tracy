@@ -1,0 +1,44 @@
+project_id: tracy-pr-review
+
+github:
+  owner: Malaber
+  repo: tracy
+  token_env: GITHUB_TOKEN
+  webhook_secret_env: GITHUB_WEBHOOK_SECRET
+  required_event_types:
+    - pull_request
+    - ping
+
+deployment:
+  mode: review
+  compose_file: /srv/tracy/deploy/compose.review.yml
+  compose_bin: docker
+  working_directory: /srv/tracy/deploy
+  hostname_template: pr-{pr}.pr.tracy.malaber.de
+  project_name_prefix: tracy-pr-
+  preview_base_domain: pr.tracy.malaber.de
+
+image:
+  registry: ghcr.io
+  repository: malaber/tracy
+  tag_template: pr-{pr}-{sha7}
+
+preview:
+  base_dir: /srv/tracy/data/reviews
+  data_dir_template: /srv/tracy/data/reviews/pr-{pr}
+  sqlite_path_template: /srv/tracy/data/reviews/pr-{pr}/tracy.db
+
+reconcile:
+  poll_interval_seconds: 60
+  cleanup_closed_prs: true
+  redeploy_on_sha_change: true
+
+traefik:
+  enable_labels: true
+  certresolver: letsencrypt
+
+state:
+  state_file: /srv/tracy/webhooker/runtime/state/tracy-pr-review.json
+
+wake:
+  wake_file: /srv/tracy/webhooker/runtime/wake/tracy-pr-review

@@ -1,0 +1,136 @@
+name: PR Review Deployment
+
+on:
+  pull_request:
+    types:
+      - opened
+      - synchronize
+      - reopened
+
+permissions:
+  contents: read
+  packages: write
+  pull-requests: write
+
+concurrency:
+  group: pr-review-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
+
+jobs:
+  review_deploy:
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    steps:
+      - name: Compute image name
+        id: image
+        env:
+          REPOSITORY: ${{ github.repository }}
+        run: echo "image=ghcr.io/${REPOSITORY,,}" >> "$GITHUB_OUTPUT"
+      - name: Compute review image tags
+        id: tag
+        env:
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          echo "source_tag=sha-$PR_HEAD_SHA" >> "$GITHUB_OUTPUT"
+          echo "review_tag=pr-$PR_NUMBER-${PR_HEAD_SHA:0:7}" >> "$GITHUB_OUTPUT"
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Wait for tested push image
+        env:
+          IMAGE: ${{ steps.image.outputs.image }}
+          IMAGE_TAG: ${{ steps.tag.outputs.source_tag }}
+        run: |
+          for attempt in $(seq 1 36); do
+            if docker buildx imagetools inspect "$IMAGE:$IMAGE_TAG"; then
+              exit 0
+            fi
+            echo "Waiting for $IMAGE:$IMAGE_TAG ($attempt/36)."
+            sleep 10
+          done
+          exit 1
+      - name: Publish review tag
+        env:
+          IMAGE: ${{ steps.image.outputs.image }}
+          SOURCE_TAG: ${{ steps.tag.outputs.source_tag }}
+          REVIEW_TAG: ${{ steps.tag.outputs.review_tag }}
+        run: docker buildx imagetools create --tag "$IMAGE:$REVIEW_TAG" "$IMAGE:$SOURCE_TAG"
+      - name: Wake webhooker review deployment
+        env:
+          WAKE_URL: ${{ vars.WEBHOOKER_REVIEW_WAKE_URL }}
+          WAKE_SECRET: ${{ secrets.WEBHOOKER_WEBHOOK_SECRET }}
+          EVENT_ACTION: ${{ github.event.action }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          REPOSITORY: ${{ github.repository }}
+          DELIVERY_ID: review-${{ github.run_id }}-${{ github.run_attempt }}
+        run: |
+          python - <<'PY'
+          import hashlib
+          import hmac
+          import json
+          import os
+          import urllib.request
+
+          if not os.environ["WAKE_URL"] or not os.environ["WAKE_SECRET"]:
+              print("Skipping review wake: Webhooker settings are not configured.")
+              raise SystemExit(0)
+          owner, repo = os.environ["REPOSITORY"].split("/", 1)
+          number = int(os.environ["PR_NUMBER"])
+          payload = {
+              "action": os.environ["EVENT_ACTION"],
+              "number": number,
+              "pull_request": {"number": number, "head": {"sha": os.environ["PR_HEAD_SHA"]}},
+              "repository": {
+                  "name": repo,
+                  "full_name": os.environ["REPOSITORY"],
+                  "owner": {"login": owner},
+              },
+          }
+          body = json.dumps(payload, separators=(",", ":"), sort_keys=True).encode()
+          signature = "sha256=" + hmac.new(
+              os.environ["WAKE_SECRET"].encode(), body, hashlib.sha256
+          ).hexdigest()
+          request = urllib.request.Request(
+              os.environ["WAKE_URL"],
+              data=body,
+              method="POST",
+              headers={
+                  "Content-Type": "application/json",
+                  "X-GitHub-Event": "pull_request",
+                  "X-GitHub-Delivery": os.environ["DELIVERY_ID"],
+                  "X-Hub-Signature-256": signature,
+              },
+          )
+          with urllib.request.urlopen(request) as response:
+              print(f"review wake status={response.status}")
+          PY
+      - uses: actions/github-script@v8
+        env:
+          REVIEW_URL: https://pr-${{ github.event.pull_request.number }}.pr.tracy.malaber.de
+        with:
+          script: |
+            const marker = '<!-- tracy-review-url -->';
+            const body = `${marker}\nReview app: ${process.env.REVIEW_URL}`;
+            const { owner, repo } = context.repo;
+            const issue_number = context.payload.pull_request.number;
+            const comments = await github.paginate(github.rest.issues.listComments, {
+              owner, repo, issue_number, per_page: 100,
+            });
+            const existing = comments.find((comment) =>
+              comment.user?.type === 'Bot' && comment.body?.includes(marker)
+            );
+            if (existing) {
+              await github.rest.issues.updateComment({
+                owner, repo, comment_id: existing.id, body,
+              });
+            } else {
+              await github.rest.issues.createComment({ owner, repo, issue_number, body });
+            }

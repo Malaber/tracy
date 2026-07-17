@@ -1,0 +1,47 @@
+project_id: tracy-production
+
+github:
+  owner: Malaber
+  repo: tracy
+  token_env: GITHUB_TOKEN
+  webhook_secret_env: GITHUB_WEBHOOK_SECRET
+  required_event_types:
+    - push
+    - ping
+
+deployment:
+  mode: production
+  compose_file: /srv/tracy/deploy/compose.production.yml
+  compose_bin: docker
+  working_directory: /srv/tracy/deploy
+  project_name_prefix: tracy-
+  production_project_name: tracy
+  production_hostname: tracy.malaber.de
+
+image:
+  registry: ghcr.io
+  repository: malaber/tracy
+  tag_template: sha-{sha}
+  production_tag_template: sha-{sha}
+
+production:
+  branch: main
+  data_dir: /srv/tracy/data/production
+  sqlite_path: /srv/tracy/data/production/tracy.db
+  backup_dir: /srv/tracy/data/backups
+  backup_keep: 3
+
+reconcile:
+  poll_interval_seconds: 60
+  cleanup_closed_prs: false
+  redeploy_on_sha_change: true
+
+traefik:
+  enable_labels: true
+  certresolver: letsencrypt
+
+state:
+  state_file: /srv/tracy/webhooker/runtime/state/tracy-production.json
+
+wake:
+  wake_file: /srv/tracy/webhooker/runtime/wake/tracy-production

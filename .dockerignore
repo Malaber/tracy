@@ -1,0 +1,12 @@
+.git
+.github
+.venv
+.pytest_cache
+.coverage
+__pycache__
+*.py[cod]
+data
+deploy
+docs
+node_modules
+tests
