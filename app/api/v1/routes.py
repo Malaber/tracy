@@ -1,0 +1,307 @@
+from __future__ import annotations
+
+import csv
+import io
+from datetime import date, datetime
+from zoneinfo import ZoneInfo
+
+from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.core.config import settings
+from app.core.database import get_db
+from app.models import BreakEntry, Preferences, WorkEntry
+from app.schemas.time_tracking import PreferencesPayload, WorkEntryPayload
+from app.services.german_holidays import FEDERAL_STATES
+from app.services.statistics import build_statistics, period_bounds
+from app.services.time_calculation import (
+    calculate_work_minutes,
+    format_clock_time,
+    minutes_as_hours,
+    parse_clock_time,
+    round_up,
+)
+
+
+router = APIRouter()
+
+
+async def _preferences(db: AsyncSession) -> Preferences:
+    preferences = await db.get(Preferences, 1)
+    if preferences is None:
+        preferences = Preferences(id=1)
+        db.add(preferences)
+        await db.flush()
+    return preferences
+
+
+def _break_to_payload(item: BreakEntry) -> dict:
+    return {
+        "id": item.id,
+        "mode": item.mode,
+        "duration_minutes": item.duration_minutes,
+        "start": format_clock_time(item.start_minutes),
+        "end": format_clock_time(item.end_minutes),
+    }
+
+
+def _entry_to_payload(entry: WorkEntry | None, work_date: date, rounding: int) -> dict:
+    if entry is None:
+        return {
+            "saved": False,
+            "date": work_date.isoformat(),
+            "check_in": None,
+            "check_out": None,
+            "check_out_next_day": False,
+            "breaks": [],
+            "break_minutes": 0,
+            "exact_minutes": None,
+            "exact_hours": None,
+            "billable_minutes": None,
+            "billable_hours": None,
+            "status": "empty",
+            "notes": "",
+        }
+
+    normalized_breaks = [
+        {
+            "mode": item.mode,
+            "duration_minutes": item.duration_minutes,
+            "start_minutes": item.start_minutes,
+            "end_minutes": item.end_minutes,
+        }
+        for item in entry.breaks
+    ]
+    exact, break_minutes = calculate_work_minutes(
+        entry.check_in_minutes,
+        entry.check_out_minutes,
+        entry.check_out_next_day,
+        normalized_breaks,
+    )
+    billable = round_up(exact, rounding) if exact is not None else None
+    status_name = "complete" if exact is not None else "in_progress"
+    if entry.check_in_minutes is None:
+        status_name = "empty"
+    return {
+        "saved": True,
+        "date": entry.work_date.isoformat(),
+        "check_in": format_clock_time(entry.check_in_minutes),
+        "check_out": format_clock_time(entry.check_out_minutes),
+        "check_out_next_day": entry.check_out_next_day,
+        "breaks": [_break_to_payload(item) for item in entry.breaks],
+        "break_minutes": break_minutes,
+        "exact_minutes": exact,
+        "exact_hours": minutes_as_hours(exact),
+        "billable_minutes": billable,
+        "billable_hours": minutes_as_hours(billable),
+        "status": status_name,
+        "notes": entry.notes,
+    }
+
+
+async def _entry_for_date(db: AsyncSession, work_date: date) -> WorkEntry | None:
+    result = await db.execute(select(WorkEntry).where(WorkEntry.work_date == work_date))
+    return result.scalar_one_or_none()
+
+
+@router.get("/meta")
+async def get_meta() -> dict:
+    return {"federal_states": FEDERAL_STATES, "timezone": settings.timezone}
+
+
+@router.get("/preferences")
+async def get_preferences(db: AsyncSession = Depends(get_db)) -> dict:
+    item = await _preferences(db)
+    return {
+        "federal_state": item.federal_state,
+        "daily_target_minutes": item.daily_target_minutes,
+        "rounding_minutes": item.rounding_minutes,
+    }
+
+
+@router.put("/preferences")
+async def update_preferences(
+    payload: PreferencesPayload, db: AsyncSession = Depends(get_db)
+) -> dict:
+    item = await _preferences(db)
+    item.federal_state = payload.federal_state
+    item.daily_target_minutes = payload.daily_target_minutes
+    item.rounding_minutes = payload.rounding_minutes
+    await db.commit()
+    return await get_preferences(db)
+
+
+@router.get("/entries")
+async def list_entries(
+    start: date,
+    end: date,
+    db: AsyncSession = Depends(get_db),
+) -> list[dict]:
+    if end < start:
+        raise HTTPException(status_code=422, detail="End date must be on or after start date.")
+    if (end - start).days > 732:
+        raise HTTPException(status_code=422, detail="Date range is limited to two years.")
+    preferences = await _preferences(db)
+    result = await db.execute(
+        select(WorkEntry)
+        .where(WorkEntry.work_date.between(start, end))
+        .order_by(WorkEntry.work_date.desc())
+    )
+    return [
+        _entry_to_payload(entry, entry.work_date, preferences.rounding_minutes)
+        for entry in result.scalars().all()
+    ]
+
+
+@router.get("/entries/{work_date}")
+async def get_entry(work_date: date, db: AsyncSession = Depends(get_db)) -> dict:
+    preferences = await _preferences(db)
+    entry = await _entry_for_date(db, work_date)
+    return _entry_to_payload(entry, work_date, preferences.rounding_minutes)
+
+
+@router.put("/entries/{work_date}")
+async def upsert_entry(
+    work_date: date,
+    payload: WorkEntryPayload,
+    db: AsyncSession = Depends(get_db),
+) -> dict:
+    entry = await _entry_for_date(db, work_date)
+    if entry is None:
+        entry = WorkEntry(work_date=work_date)
+        db.add(entry)
+    entry.check_in_minutes = parse_clock_time(payload.check_in)
+    entry.check_out_minutes = parse_clock_time(payload.check_out)
+    entry.check_out_next_day = payload.check_out_next_day
+    entry.notes = payload.notes.strip()
+    entry.breaks.clear()
+    for position, break_payload in enumerate(payload.breaks):
+        normalized = break_payload.normalized()
+        entry.breaks.append(BreakEntry(position=position, **normalized))
+    await db.commit()
+    await db.refresh(entry)
+    preferences = await _preferences(db)
+    return _entry_to_payload(entry, work_date, preferences.rounding_minutes)
+
+
+@router.delete("/entries/{work_date}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_entry(work_date: date, db: AsyncSession = Depends(get_db)) -> Response:
+    entry = await _entry_for_date(db, work_date)
+    if entry is not None:
+        await db.delete(entry)
+    await db.commit()
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+@router.post("/entries/{work_date}/check-in")
+async def check_in(work_date: date, db: AsyncSession = Depends(get_db)) -> dict:
+    entry = await _entry_for_date(db, work_date)
+    if entry is not None and entry.check_in_minutes is not None:
+        raise HTTPException(status_code=409, detail="This day already has a check-in time.")
+    now = datetime.now(ZoneInfo(settings.timezone))
+    if entry is None:
+        entry = WorkEntry(work_date=work_date)
+        db.add(entry)
+    entry.check_in_minutes = now.hour * 60 + now.minute
+    await db.commit()
+    await db.refresh(entry)
+    preferences = await _preferences(db)
+    return _entry_to_payload(entry, work_date, preferences.rounding_minutes)
+
+
+@router.post("/entries/{work_date}/check-out")
+async def check_out(work_date: date, db: AsyncSession = Depends(get_db)) -> dict:
+    entry = await _entry_for_date(db, work_date)
+    if entry is None or entry.check_in_minutes is None:
+        raise HTTPException(status_code=409, detail="Check in before checking out.")
+    now = datetime.now(ZoneInfo(settings.timezone))
+    checkout_minutes = now.hour * 60 + now.minute
+    next_day = now.date() > work_date
+    if not next_day and checkout_minutes <= entry.check_in_minutes:
+        raise HTTPException(status_code=409, detail="Check-out must be later than check-in.")
+    entry.check_out_minutes = checkout_minutes
+    entry.check_out_next_day = next_day
+    await db.commit()
+    await db.refresh(entry)
+    preferences = await _preferences(db)
+    return _entry_to_payload(entry, work_date, preferences.rounding_minutes)
+
+
+@router.get("/statistics")
+async def get_statistics(
+    period: str = Query(default="month", pattern="^(week|month|year|custom)$"),
+    anchor: date = Query(default_factory=date.today),
+    start: date | None = None,
+    end: date | None = None,
+    db: AsyncSession = Depends(get_db),
+) -> dict:
+    if period == "custom":
+        if start is None or end is None:
+            raise HTTPException(status_code=422, detail="Custom statistics need start and end.")
+        range_start, range_end = start, end
+    else:
+        range_start, range_end = period_bounds(period, anchor)
+    if range_end < range_start or (range_end - range_start).days > 732:
+        raise HTTPException(status_code=422, detail="Choose a valid range of up to two years.")
+
+    preferences = await _preferences(db)
+    result = await db.execute(
+        select(WorkEntry).where(WorkEntry.work_date.between(range_start, range_end))
+    )
+    entries = {
+        entry.work_date: _entry_to_payload(entry, entry.work_date, preferences.rounding_minutes)
+        for entry in result.scalars().all()
+    }
+    return build_statistics(
+        range_start,
+        range_end,
+        entries,
+        federal_state=preferences.federal_state,
+        daily_target_minutes=preferences.daily_target_minutes,
+    )
+
+
+@router.get("/statistics/export.csv")
+async def export_statistics(
+    period: str = Query(default="month", pattern="^(week|month|year|custom)$"),
+    anchor: date = Query(default_factory=date.today),
+    start: date | None = None,
+    end: date | None = None,
+    db: AsyncSession = Depends(get_db),
+) -> Response:
+    data = await get_statistics(period, anchor, start, end, db)
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow(
+        [
+            "Date",
+            "Day",
+            "Calendar",
+            "Exact hours",
+            "Billable hours",
+            "Target hours",
+            "Balance hours",
+            "Notes",
+        ]
+    )
+    for day in data["days"]:
+        calendar = day["holiday"] or ("Weekend" if day["is_weekend"] else "Working day")
+        writer.writerow(
+            [
+                day["date"],
+                day["weekday"],
+                calendar,
+                f"{day['exact_minutes'] / 60:.2f}",
+                f"{day['billable_minutes'] / 60:.2f}",
+                f"{day['expected_minutes'] / 60:.2f}",
+                f"{day['balance_minutes'] / 60:.2f}",
+                day["notes"],
+            ]
+        )
+    filename = f"tracy-{data['start']}-{data['end']}.csv"
+    return Response(
+        content=output.getvalue(),
+        media_type="text/csv",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )

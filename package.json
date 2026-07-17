@@ -1,0 +1,14 @@
+{
+  "name": "tracy",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": "24.x"
+  },
+  "scripts": {
+    "test:js": "node --test"
+  },
+  "devDependencies": {
+    "jsdom": "^29.0.0"
+  }
+}

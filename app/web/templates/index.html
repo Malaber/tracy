@@ -1,0 +1,227 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#172554">
+  <title>{{ app_name }} · Working time</title>
+  <link rel="icon" href="/static/img/tracy.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/static/app.css">
+</head>
+<body>
+  <div id="app" class="app-shell">
+    <header class="topbar">
+      <a class="brand" href="#tracker" aria-label="Tracy home">
+        <span class="brand-mark" aria-hidden="true"><span></span></span>
+        <span>{{ app_name }}</span>
+      </a>
+      <nav class="primary-nav" aria-label="Main navigation">
+        <button class="nav-item is-active" data-view="tracker" type="button">
+          <span aria-hidden="true">◷</span> Tracker
+        </button>
+        <button class="nav-item" data-view="statistics" type="button">
+          <span aria-hidden="true">⌁</span> Statistics
+        </button>
+      </nav>
+      <button id="settingsButton" class="icon-button settings-button" type="button" aria-label="Open settings">⚙</button>
+    </header>
+
+    <main>
+      <section id="trackerView" class="view view-tracker">
+        <div class="page-heading">
+          <div>
+            <p class="eyebrow">Daily record</p>
+            <h1>Track your working day</h1>
+            <p>Capture the facts now. Tracy keeps exact and invoice-ready totals side by side.</p>
+          </div>
+          <span class="local-badge"><i></i> Local workspace</span>
+        </div>
+
+        <div class="tracker-layout">
+          <section class="card entry-card" aria-labelledby="entryDateHeading">
+            <div class="date-toolbar">
+              <button id="previousDay" class="icon-button" type="button" aria-label="Previous day">←</button>
+              <button id="datePickerButton" class="date-title" type="button">
+                <span id="entryWeekday">Today</span>
+                <strong id="entryDateHeading">—</strong>
+              </button>
+              <input id="workDate" class="visually-hidden" type="date">
+              <button id="nextDay" class="icon-button" type="button" aria-label="Next day">→</button>
+            </div>
+
+            <div id="dayStatus" class="day-status is-empty">
+              <span class="status-dot"></span>
+              <span>No time saved for this day</span>
+            </div>
+
+            <div class="time-fields">
+              <div class="time-field">
+                <div class="field-label-row">
+                  <label for="checkIn">Check in</label>
+                  <button id="checkInNow" class="text-button" type="button">Now</button>
+                </div>
+                <input id="checkIn" type="text" inputmode="decimal" placeholder="08:00" autocomplete="off">
+              </div>
+              <div class="time-arrow" aria-hidden="true">→</div>
+              <div class="time-field">
+                <div class="field-label-row">
+                  <label for="checkOut">Check out</label>
+                  <button id="checkOutNow" class="text-button" type="button">Now</button>
+                </div>
+                <input id="checkOut" type="text" inputmode="decimal" placeholder="17:00" autocomplete="off">
+              </div>
+            </div>
+
+            <label class="next-day-row" for="nextDayCheckout">
+              <input id="nextDayCheckout" type="checkbox">
+              <span>Check-out is on the following day</span>
+            </label>
+
+            <section class="break-section" aria-labelledby="breakHeading">
+              <div class="section-heading-row">
+                <div>
+                  <h2 id="breakHeading">Breaks</h2>
+                  <p>Enter minutes or a start/end range.</p>
+                </div>
+                <button id="addBreak" class="secondary-button compact" type="button">+ Add break</button>
+              </div>
+              <div id="breakList" class="break-list"></div>
+              <p id="emptyBreaks" class="empty-breaks">No breaks added.</p>
+            </section>
+
+            <div class="notes-field">
+              <label for="notes">Notes <span>optional</span></label>
+              <textarea id="notes" rows="3" maxlength="2000" placeholder="Project, customer, or anything useful for the invoice…"></textarea>
+            </div>
+
+            <div id="formError" class="form-error" role="alert" hidden></div>
+            <div class="entry-actions">
+              <button id="deleteDay" class="danger-button" type="button">Clear day</button>
+              <button id="saveEntry" class="primary-button" type="button">Save working day</button>
+            </div>
+          </section>
+
+          <aside class="summary-column">
+            <section class="card live-summary" aria-live="polite">
+              <p class="eyebrow">Today's result</p>
+              <div id="billableHours" class="big-hours">—</div>
+              <p class="big-hours-label">billable hours</p>
+              <div class="summary-divider"></div>
+              <dl class="summary-list">
+                <div><dt>Exact working time</dt><dd id="exactDuration">—</dd></div>
+                <div><dt>Total breaks</dt><dd id="breakDuration">—</dd></div>
+                <div><dt>Rounding</dt><dd id="roundingDescription">Next 15 min</dd></div>
+              </dl>
+            </section>
+
+            <section class="card week-card">
+              <div class="section-heading-row">
+                <div>
+                  <p class="eyebrow">This week</p>
+                  <h2 id="weekTotal">0 h / 40 h</h2>
+                </div>
+                <span id="weekBalance" class="balance-badge">0 h</span>
+              </div>
+              <div class="progress-track"><span id="weekProgress"></span></div>
+              <div id="recentDays" class="recent-days"></div>
+            </section>
+          </aside>
+        </div>
+      </section>
+
+      <section id="statisticsView" class="view view-statistics" hidden>
+        <div class="page-heading stats-heading">
+          <div>
+            <p class="eyebrow">Overview</p>
+            <h1>Statistics</h1>
+            <p>Working time, targets, weekends, and German public holidays in one view.</p>
+          </div>
+          <div class="stats-controls">
+            <div class="period-switcher" role="group" aria-label="Statistics period">
+              <button data-period="week" type="button">Week</button>
+              <button data-period="month" class="is-active" type="button">Month</button>
+              <button data-period="year" type="button">Year</button>
+            </div>
+            <a id="exportCsv" class="secondary-button export-button" href="/api/v1/statistics/export.csv">⇩ Export CSV</a>
+          </div>
+        </div>
+
+        <div class="stats-toolbar card">
+          <button id="previousPeriod" class="icon-button" type="button" aria-label="Previous period">←</button>
+          <div><span>Selected period</span><strong id="statisticsRange">—</strong></div>
+          <button id="nextPeriod" class="icon-button" type="button" aria-label="Next period">→</button>
+        </div>
+
+        <div class="metric-grid">
+          <article class="metric-card card"><span>Exact time</span><strong id="statExact">—</strong><small id="statCompleted">0 completed days</small></article>
+          <article class="metric-card card accent"><span>Billable time</span><strong id="statBillable">—</strong><small>After daily rounding</small></article>
+          <article class="metric-card card"><span>Target</span><strong id="statTarget">—</strong><small id="statWorkdays">0 working days</small></article>
+          <article class="metric-card card"><span>Balance</span><strong id="statBalance">—</strong><small>Exact time vs. target</small></article>
+        </div>
+
+        <div class="statistics-layout">
+          <section class="card chart-card">
+            <div class="section-heading-row">
+              <div><p class="eyebrow">Hours by week</p><h2>Actual vs. target</h2></div>
+              <div class="chart-legend"><span><i class="actual"></i>Actual</span><span><i class="target"></i>Target</span></div>
+            </div>
+            <div id="weeklyChart" class="weekly-chart"></div>
+          </section>
+          <section class="card calendar-summary">
+            <p class="eyebrow">Calendar impact</p>
+            <h2>Working-day calculation</h2>
+            <dl class="summary-list large">
+              <div><dt>Working days</dt><dd id="calendarWorkdays">—</dd></div>
+              <div><dt>Weekend days</dt><dd id="calendarWeekends">—</dd></div>
+              <div><dt>Holidays on weekdays</dt><dd id="calendarHolidays">—</dd></div>
+            </dl>
+            <p class="calendar-note">Uses national and state-wide German holidays. Local municipal exceptions are not automatically deducted.</p>
+          </section>
+        </div>
+
+        <section class="card day-table-card">
+          <div class="section-heading-row"><div><p class="eyebrow">Daily details</p><h2>Recorded days</h2></div></div>
+          <div class="table-scroll">
+            <table>
+              <thead><tr><th>Date</th><th>Day</th><th>Calendar</th><th>Exact</th><th>Billable</th><th>Balance</th></tr></thead>
+              <tbody id="statisticsDays"></tbody>
+            </table>
+          </div>
+        </section>
+      </section>
+    </main>
+
+    <nav class="mobile-nav" aria-label="Mobile navigation">
+      <button class="nav-item is-active" data-view="tracker" type="button"><span>◷</span>Tracker</button>
+      <button class="nav-item" data-view="statistics" type="button"><span>⌁</span>Statistics</button>
+      <button id="mobileSettingsButton" class="nav-item" type="button"><span>⚙</span>Settings</button>
+    </nav>
+
+    <dialog id="settingsDialog" class="modal">
+      <form id="settingsForm" method="dialog">
+        <div class="modal-heading"><div><p class="eyebrow">Preferences</p><h2>Time settings</h2></div><button class="icon-button close-modal" type="button" aria-label="Close">×</button></div>
+        <label for="federalState">German federal state</label>
+        <select id="federalState"></select>
+        <p class="field-help">This controls which state-wide public holidays reduce your target.</p>
+        <label for="dailyTarget">Daily target</label>
+        <div class="input-with-suffix"><input id="dailyTarget" type="number" min="0" max="24" step="0.25"><span>hours</span></div>
+        <label for="roundingMinutes">Invoice rounding</label>
+        <select id="roundingMinutes"><option value="1">No rounding</option><option value="5">Next 5 minutes</option><option value="10">Next 10 minutes</option><option value="15">Next 15 minutes</option><option value="30">Next 30 minutes</option><option value="60">Next full hour</option></select>
+        <div id="settingsError" class="form-error" role="alert" hidden></div>
+        <button class="primary-button" type="submit">Save settings</button>
+      </form>
+    </dialog>
+
+    <dialog id="deleteDialog" class="modal small-modal">
+      <form method="dialog">
+        <h2>Clear this working day?</h2>
+        <p>The stored times, breaks, and note for this date will be removed.</p>
+        <div class="modal-actions"><button class="secondary-button close-delete" type="button">Keep it</button><button id="confirmDelete" class="danger-button filled" type="button">Clear day</button></div>
+      </form>
+    </dialog>
+
+    <div id="toast" class="toast" role="status" aria-live="polite"></div>
+  </div>
+  <script type="module" src="/static/app.js"></script>
+</body>
+</html>
