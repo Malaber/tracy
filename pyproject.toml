@@ -20,7 +20,7 @@ dependencies = [
   "python-jose[cryptography]>=3.3.0",
   "jinja2>=3.1.4",
   "itsdangerous>=2.2.0",
-  "fastpasskey @ https://github.com/Malaber/python-libs/releases/download/fastpasskey-v0.2.3/fastpasskey-0.2.3-py3-none-any.whl#sha256=084da97958f036f7686d247d3ef7ed75b3b0aefd5218a3bfd3bdc8955a177e9f",
+  "fastpasskey @ https://github.com/Malaber/python-libs/releases/download/fastpasskey-v0.2.4/fastpasskey-0.2.4-py3-none-any.whl#sha256=906eafb794b7ea2c4fc41e7a3b7b9e7473c4ddf867cb099288f7a3f55c5a76f5",
 ]
 
 [project.optional-dependencies]
