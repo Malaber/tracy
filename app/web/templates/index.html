@@ -23,7 +23,13 @@
           <span aria-hidden="true">⌁</span> Statistics
         </button>
       </nav>
-      <button id="settingsButton" class="icon-button settings-button" type="button" aria-label="Open settings">⚙</button>
+      <div class="account-actions">
+        <button id="settingsButton" class="icon-button settings-button" type="button" aria-label="Open settings">⚙</button>
+        <a class="secondary-button header-link" href="/security">Passkeys</a>
+        <form method="post" action="/logout">
+          <button class="secondary-button" type="submit">Sign out</button>
+        </form>
+      </div>
     </header>
 
     <main>
@@ -195,6 +201,7 @@
       <button class="nav-item is-active" data-view="tracker" type="button"><span>◷</span>Tracker</button>
       <button class="nav-item" data-view="statistics" type="button"><span>⌁</span>Statistics</button>
       <button id="mobileSettingsButton" class="nav-item" type="button"><span>⚙</span>Settings</button>
+      <a class="nav-item" href="/security"><span>⌾</span>Passkeys</a>
     </nav>
 
     <dialog id="settingsDialog" class="modal">

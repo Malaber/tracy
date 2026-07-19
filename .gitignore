@@ -12,3 +12,4 @@ node_modules/
 *.db-wal
 ui-test-server.log
 ui-test-server.pid
+e2e-artifacts/

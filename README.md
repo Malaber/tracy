@@ -12,12 +12,10 @@ Germany-aware target hours.
 - Week, month, and year statistics
 - CSV export for the selected statistics period
 - German national and selectable state-wide public holidays
+- Passwordless account access and passkey management through FastPasskey
 - SQLite locally, with PostgreSQL support through SQLAlchemy
 - FastAPI, SQLAlchemy, Alembic, vanilla JavaScript, pytest, and Invoke
 - GitHub Actions releases with amd64/arm64 images on GHCR
-
-Authentication is intentionally not included yet. The API and data model are isolated so a shared
-authentication package can be added in front of the routes later.
 
 ## Local development
 
@@ -27,6 +25,8 @@ authentication package can be added in front of the routes later.
 ```
 
 Open [http://localhost:8000](http://localhost:8000).
+Create an account with a passkey on the login screen. Existing tracker data is assigned to the
+first account created after upgrading.
 
 Run all checks with:
 

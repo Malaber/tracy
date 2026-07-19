@@ -4,7 +4,10 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
+from starlette.middleware.sessions import SessionMiddleware
+from uvicorn.middleware.proxy_headers import ProxyHeadersMiddleware
 
+from app.api.v1.auth import router as auth_router
 from app.api.v1.routes import router as api_router
 from app.core.config import settings
 from app.core.database import run_migrations
@@ -26,6 +29,14 @@ def create_app(*, with_lifespan: bool = True) -> FastAPI:
         title=settings.app_name,
         lifespan=lifespan if with_lifespan else None,
     )
+    application.add_middleware(
+        SessionMiddleware,
+        secret_key=settings.secret_key,
+        https_only=settings.secure_cookies,
+        max_age=settings.session_max_age_seconds,
+    )
+    application.add_middleware(ProxyHeadersMiddleware, trusted_hosts="*")
+    application.include_router(auth_router, prefix="/api/v1")
     application.include_router(api_router, prefix="/api/v1")
     application.include_router(web_router)
     application.mount("/static", StaticFiles(directory="app/web/static"), name="static")

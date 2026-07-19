@@ -1,0 +1,15 @@
+{% extends "auth_base.html" %}
+{% block title %}Passkeys · {{ app_name }}{% endblock %}
+{% block content %}
+<section class="capabilities-card card">
+  <p class="eyebrow">Passwordless security</p>
+  <h1>Passkeys protect your Tracy account</h1>
+  <p>Passkeys use your device unlock, fingerprint, or face verification. Tracy never receives a password or your biometric data.</p>
+  <ul>
+    <li>Phishing-resistant sign-in tied to Tracy's domain.</li>
+    <li>Sync through a compatible password manager when you choose.</li>
+    <li>Add multiple passkeys from the Security page after signing in.</li>
+  </ul>
+  <a class="primary-button header-link" href="/login">Continue to sign in</a>
+</section>
+{% endblock %}

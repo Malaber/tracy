@@ -6,7 +6,11 @@ services:
       - ./env/review.common.env
     environment:
       APP_HOSTNAME: ${APP_HOSTNAME}
+      APP_BASE_URL: https://${APP_HOSTNAME}
       DATABASE_URL: sqlite+aiosqlite:////data/tracy.db
+      WEBAUTHN_RP_ID: ${APP_HOSTNAME}
+      SECRET_KEY: ${TRACY_SECRET_KEY}
+      SECURE_COOKIES: "true"
     volumes:
       - ${APP_DATA_DIR}:/data
     healthcheck:

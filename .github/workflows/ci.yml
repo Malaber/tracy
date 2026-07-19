@@ -68,6 +68,30 @@ jobs:
       - run: python -m invoke install-js
       - run: python -m invoke check-js
 
+  browser_e2e:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      E2E_BROWSER_CHANNEL: chrome
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      - uses: actions/setup-node@v6
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+      - run: python -m pip install invoke
+      - run: python -m invoke bootstrap-ci
+      - run: python -m invoke install-js
+      - run: python -m invoke browser-e2e
+      - if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: passkey-browser-e2e
+          path: e2e-artifacts/passkey
+          retention-days: 2
+
   version:
     runs-on: ubuntu-latest
     outputs:
@@ -94,6 +118,7 @@ jobs:
       - python_flake8
       - python_pytest
       - javascript_test
+      - browser_e2e
       - version
     strategy:
       fail-fast: false
