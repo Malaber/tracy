@@ -3,15 +3,17 @@ from __future__ import annotations
 import csv
 import io
 from datetime import date, datetime
+from uuid import UUID
 from zoneinfo import ZoneInfo
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.api.deps import get_current_user
 from app.core.config import settings
 from app.core.database import get_db
-from app.models import BreakEntry, Preferences, WorkEntry
+from app.models import BreakEntry, Preferences, User, WorkEntry
 from app.schemas.time_tracking import PreferencesPayload, WorkEntryPayload
 from app.services.german_holidays import FEDERAL_STATES
 from app.services.statistics import build_statistics, period_bounds
@@ -27,13 +29,23 @@ from app.services.time_calculation import (
 router = APIRouter()
 
 
-async def _preferences(db: AsyncSession) -> Preferences:
-    preferences = await db.get(Preferences, 1)
+async def _preferences(db: AsyncSession, user_id: UUID) -> Preferences:
+    preferences = (
+        await db.execute(select(Preferences).where(Preferences.user_id == user_id))
+    ).scalar_one_or_none()
     if preferences is None:
-        preferences = Preferences(id=1)
+        preferences = Preferences(user_id=user_id)
         db.add(preferences)
         await db.flush()
     return preferences
+
+
+def _preferences_payload(item: Preferences) -> dict:
+    return {
+        "federal_state": item.federal_state,
+        "daily_target_minutes": item.daily_target_minutes,
+        "rounding_minutes": item.rounding_minutes,
+    }
 
 
 def _break_to_payload(item: BreakEntry) -> dict:
@@ -100,36 +112,41 @@ def _entry_to_payload(entry: WorkEntry | None, work_date: date, rounding: int) -
     }
 
 
-async def _entry_for_date(db: AsyncSession, work_date: date) -> WorkEntry | None:
-    result = await db.execute(select(WorkEntry).where(WorkEntry.work_date == work_date))
+async def _entry_for_date(db: AsyncSession, user_id: UUID, work_date: date) -> WorkEntry | None:
+    result = await db.execute(
+        select(WorkEntry).where(
+            WorkEntry.user_id == user_id,
+            WorkEntry.work_date == work_date,
+        )
+    )
     return result.scalar_one_or_none()
 
 
 @router.get("/meta")
-async def get_meta() -> dict:
+async def get_meta(_user: User = Depends(get_current_user)) -> dict:
     return {"federal_states": FEDERAL_STATES, "timezone": settings.timezone}
 
 
 @router.get("/preferences")
-async def get_preferences(db: AsyncSession = Depends(get_db)) -> dict:
-    item = await _preferences(db)
-    return {
-        "federal_state": item.federal_state,
-        "daily_target_minutes": item.daily_target_minutes,
-        "rounding_minutes": item.rounding_minutes,
-    }
+async def get_preferences(
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+) -> dict:
+    return _preferences_payload(await _preferences(db, user.id))
 
 
 @router.put("/preferences")
 async def update_preferences(
-    payload: PreferencesPayload, db: AsyncSession = Depends(get_db)
+    payload: PreferencesPayload,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
 ) -> dict:
-    item = await _preferences(db)
+    item = await _preferences(db, user.id)
     item.federal_state = payload.federal_state
     item.daily_target_minutes = payload.daily_target_minutes
     item.rounding_minutes = payload.rounding_minutes
     await db.commit()
-    return await get_preferences(db)
+    return _preferences_payload(item)
 
 
 @router.get("/entries")
@@ -137,15 +154,19 @@ async def list_entries(
     start: date,
     end: date,
     db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
 ) -> list[dict]:
     if end < start:
         raise HTTPException(status_code=422, detail="End date must be on or after start date.")
     if (end - start).days > 732:
         raise HTTPException(status_code=422, detail="Date range is limited to two years.")
-    preferences = await _preferences(db)
+    preferences = await _preferences(db, user.id)
     result = await db.execute(
         select(WorkEntry)
-        .where(WorkEntry.work_date.between(start, end))
+        .where(
+            WorkEntry.user_id == user.id,
+            WorkEntry.work_date.between(start, end),
+        )
         .order_by(WorkEntry.work_date.desc())
     )
     return [
@@ -155,9 +176,13 @@ async def list_entries(
 
 
 @router.get("/entries/{work_date}")
-async def get_entry(work_date: date, db: AsyncSession = Depends(get_db)) -> dict:
-    preferences = await _preferences(db)
-    entry = await _entry_for_date(db, work_date)
+async def get_entry(
+    work_date: date,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+) -> dict:
+    preferences = await _preferences(db, user.id)
+    entry = await _entry_for_date(db, user.id, work_date)
     return _entry_to_payload(entry, work_date, preferences.rounding_minutes)
 
 
@@ -166,10 +191,11 @@ async def upsert_entry(
     work_date: date,
     payload: WorkEntryPayload,
     db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
 ) -> dict:
-    entry = await _entry_for_date(db, work_date)
+    entry = await _entry_for_date(db, user.id, work_date)
     if entry is None:
-        entry = WorkEntry(work_date=work_date)
+        entry = WorkEntry(user_id=user.id, work_date=work_date)
         db.add(entry)
     entry.check_in_minutes = parse_clock_time(payload.check_in)
     entry.check_out_minutes = parse_clock_time(payload.check_out)
@@ -181,13 +207,17 @@ async def upsert_entry(
         entry.breaks.append(BreakEntry(position=position, **normalized))
     await db.commit()
     await db.refresh(entry)
-    preferences = await _preferences(db)
+    preferences = await _preferences(db, user.id)
     return _entry_to_payload(entry, work_date, preferences.rounding_minutes)
 
 
 @router.delete("/entries/{work_date}", status_code=status.HTTP_204_NO_CONTENT)
-async def delete_entry(work_date: date, db: AsyncSession = Depends(get_db)) -> Response:
-    entry = await _entry_for_date(db, work_date)
+async def delete_entry(
+    work_date: date,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+) -> Response:
+    entry = await _entry_for_date(db, user.id, work_date)
     if entry is not None:
         await db.delete(entry)
     await db.commit()
@@ -195,24 +225,32 @@ async def delete_entry(work_date: date, db: AsyncSession = Depends(get_db)) -> R
 
 
 @router.post("/entries/{work_date}/check-in")
-async def check_in(work_date: date, db: AsyncSession = Depends(get_db)) -> dict:
-    entry = await _entry_for_date(db, work_date)
+async def check_in(
+    work_date: date,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+) -> dict:
+    entry = await _entry_for_date(db, user.id, work_date)
     if entry is not None and entry.check_in_minutes is not None:
         raise HTTPException(status_code=409, detail="This day already has a check-in time.")
     now = datetime.now(ZoneInfo(settings.timezone))
     if entry is None:
-        entry = WorkEntry(work_date=work_date)
+        entry = WorkEntry(user_id=user.id, work_date=work_date)
         db.add(entry)
     entry.check_in_minutes = now.hour * 60 + now.minute
     await db.commit()
     await db.refresh(entry)
-    preferences = await _preferences(db)
+    preferences = await _preferences(db, user.id)
     return _entry_to_payload(entry, work_date, preferences.rounding_minutes)
 
 
 @router.post("/entries/{work_date}/check-out")
-async def check_out(work_date: date, db: AsyncSession = Depends(get_db)) -> dict:
-    entry = await _entry_for_date(db, work_date)
+async def check_out(
+    work_date: date,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+) -> dict:
+    entry = await _entry_for_date(db, user.id, work_date)
     if entry is None or entry.check_in_minutes is None:
         raise HTTPException(status_code=409, detail="Check in before checking out.")
     now = datetime.now(ZoneInfo(settings.timezone))
@@ -224,7 +262,7 @@ async def check_out(work_date: date, db: AsyncSession = Depends(get_db)) -> dict
     entry.check_out_next_day = next_day
     await db.commit()
     await db.refresh(entry)
-    preferences = await _preferences(db)
+    preferences = await _preferences(db, user.id)
     return _entry_to_payload(entry, work_date, preferences.rounding_minutes)
 
 
@@ -235,6 +273,7 @@ async def get_statistics(
     start: date | None = None,
     end: date | None = None,
     db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
 ) -> dict:
     if period == "custom":
         if start is None or end is None:
@@ -245,9 +284,12 @@ async def get_statistics(
     if range_end < range_start or (range_end - range_start).days > 732:
         raise HTTPException(status_code=422, detail="Choose a valid range of up to two years.")
 
-    preferences = await _preferences(db)
+    preferences = await _preferences(db, user.id)
     result = await db.execute(
-        select(WorkEntry).where(WorkEntry.work_date.between(range_start, range_end))
+        select(WorkEntry).where(
+            WorkEntry.user_id == user.id,
+            WorkEntry.work_date.between(range_start, range_end),
+        )
     )
     entries = {
         entry.work_date: _entry_to_payload(entry, entry.work_date, preferences.rounding_minutes)
@@ -269,8 +311,9 @@ async def export_statistics(
     start: date | None = None,
     end: date | None = None,
     db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
 ) -> Response:
-    data = await get_statistics(period, anchor, start, end, db)
+    data = await get_statistics(period, anchor, start, end, db, user)
     output = io.StringIO()
     writer = csv.writer(output)
     writer.writerow(

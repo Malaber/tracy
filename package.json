@@ -6,9 +6,11 @@
     "node": "24.x"
   },
   "scripts": {
-    "test:js": "node --test"
+    "test:js": "node --test",
+    "test:e2e": "node scripts/run_passkey_e2e.mjs"
   },
   "devDependencies": {
-    "jsdom": "^29.0.0"
+    "jsdom": "^29.0.0",
+    "playwright": "^1.61.1"
   }
 }

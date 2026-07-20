@@ -45,6 +45,7 @@ settings (paths can be adjusted to its inventory):
 webhooker_env:
   GITHUB_TOKEN: "{{ webhooker_github_token }}"
   GITHUB_WEBHOOK_SECRET: "{{ webhooker_github_webhook_secret }}"
+  TRACY_SECRET_KEY: "{{ tracy_secret_key }}"
 
 webhooker_worker_extra_mounts:
   - /srv/tracy:/srv/tracy
@@ -66,5 +67,10 @@ Copy the Compose and common environment files into `/srv/tracy/deploy`, and rend
 Production defaults to `tracy.malaber.de`; review deployments use
 `pr-<number>.pr.tracy.malaber.de`. Update the project files and PR workflow together if DNS differs.
 
-Authentication is not present in Tracy yet. Do not expose a production or review deployment to an
-untrusted network until the shared authentication layer is integrated.
+`TRACY_SECRET_KEY` must be a stable, random value of at least 32 bytes. The application bundles set
+the WebAuthn origin and relying-party ID from each deployment hostname, enforce secure cookies, and
+use that secret to sign browser sessions and API tokens.
+
+Existing records are assigned to the first passkey account created after an upgrade. Production
+and each review deployment keep separate user, passkey, and tracker data in their existing isolated
+SQLite databases.

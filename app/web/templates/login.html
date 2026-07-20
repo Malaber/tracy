@@ -1,0 +1,6 @@
+{% extends "auth_base.html" %}
+{% block title %}Sign in · {{ app_name }}{% endblock %}
+{% block content %}
+{% from "fastpasskey/login.html" import passkey_login with context %}
+{{ passkey_login(next_url) }}
+{% endblock %}

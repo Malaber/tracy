@@ -8,8 +8,8 @@ async def test_health_web_meta_and_preferences(client):
     response = await client.get("/health")
     assert response.json() == {"status": "ok"}
     response = await client.get("/")
-    assert response.status_code == 200
-    assert "Track your working day" in response.text
+    assert response.status_code == 303
+    assert response.headers["location"] == "/login"
     meta = (await client.get("/api/v1/meta")).json()
     assert meta["timezone"] == "Europe/Berlin"
     assert meta["federal_states"]["NW"] == "North Rhine-Westphalia"
@@ -101,3 +101,18 @@ async def test_in_progress_actions_and_validation(client):
     assert (
         await client.get("/api/v1/statistics?period=custom&start=2027-01-01&end=2026-01-01")
     ).status_code == 422
+
+
+@pytest.mark.asyncio
+async def test_authentication_gates_web_and_api(unauthenticated_client):
+    root = await unauthenticated_client.get("/", follow_redirects=False)
+    assert root.status_code == 303
+    assert root.headers["location"] == "/login"
+    login = await unauthenticated_client.get("/login")
+    assert login.status_code == 200
+    assert "Sign in with passkey" in login.text
+    assert "Create passkey" in login.text
+    assert (await unauthenticated_client.get("/api/v1/preferences")).status_code == 401
+    asset = await unauthenticated_client.get("/api/v1/auth/assets/fastpasskey.js")
+    assert asset.status_code == 200
+    assert "navigator.credentials.create" in asset.text

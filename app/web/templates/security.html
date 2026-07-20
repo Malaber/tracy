@@ -1,0 +1,13 @@
+{% extends "auth_base.html" %}
+{% block title %}Security · {{ app_name }}{% endblock %}
+{% block content %}
+<section class="security-heading">
+  <p class="eyebrow">Account security</p>
+  <h1>Passkeys</h1>
+  <p>Signed in as <strong>{{ user.display_name }}</strong> · {{ user.email }}</p>
+</section>
+<section data-user-settings>
+  {% from "fastpasskey/management.html" import passkey_management with context %}
+  {{ passkey_management() }}
+</section>
+{% endblock %}

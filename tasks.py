@@ -1,8 +1,12 @@
 import os
 import re
+import signal
 import shlex
+import shutil
 import subprocess
 import sys
+import time
+import urllib.request
 from pathlib import Path
 
 from invoke import task
@@ -144,7 +148,92 @@ def check_js(c):
     c.run("npm run test:js")
 
 
-@task(check_python, check_js)
+@task(help={"with_deps": "Install Chromium and its system dependencies."})
+def install_browser(c, with_deps=False):
+    flag = " --with-deps" if with_deps else ""
+    c.run(f"npx playwright install{flag} chromium")
+
+
+@task(
+    help={
+        "port": "Local port used by the temporary Tracy server.",
+        "database_path": "Temporary SQLite database path, relative to the repo.",
+        "artifact_dir": "Directory for e2e screenshots, summary, and server log.",
+    }
+)
+def browser_e2e(
+    c,
+    port=8011,
+    database_path="tmp-passkey-e2e.db",
+    artifact_dir="e2e-artifacts/passkey",
+):
+    database_file = ROOT / database_path
+    for candidate in (
+        database_file,
+        Path(f"{database_file}-shm"),
+        Path(f"{database_file}-wal"),
+    ):
+        candidate.unlink(missing_ok=True)
+
+    artifacts = ROOT / artifact_dir
+    shutil.rmtree(artifacts, ignore_errors=True)
+    artifacts.mkdir(parents=True, exist_ok=True)
+    log_path = artifacts / "server.log"
+    environment = os.environ.copy()
+    environment.update(
+        {
+            "APP_BASE_URL": f"http://localhost:{port}",
+            "DATABASE_URL": f"sqlite+aiosqlite:///{database_file}",
+            "PREVIEW_ARTIFACT_DIR": str(artifacts),
+            "PREVIEW_BASE_URL": f"http://localhost:{port}",
+            "SECRET_KEY": "tracy-passkey-e2e-secret-32-bytes",
+            "SECURE_COOKIES": "false",
+            "WEBAUTHN_RP_ID": "localhost",
+        }
+    )
+    with log_path.open("w", encoding="utf-8") as log_file:
+        process = subprocess.Popen(
+            [
+                sys.executable,
+                "-m",
+                "uvicorn",
+                "app.main:app",
+                "--host",
+                "127.0.0.1",
+                "--port",
+                str(port),
+            ],
+            cwd=ROOT,
+            env=environment,
+            stdout=log_file,
+            stderr=subprocess.STDOUT,
+            start_new_session=True,
+        )
+    try:
+        health_url = f"http://127.0.0.1:{port}/health"
+        for _ in range(60):
+            if process.poll() is not None:
+                raise RuntimeError(f"Tracy e2e server exited; see {log_path}")
+            try:
+                with urllib.request.urlopen(health_url, timeout=1) as response:
+                    if response.status == 200:
+                        break
+            except OSError:
+                time.sleep(0.25)
+        else:
+            raise RuntimeError(f"Tracy e2e server did not become healthy; see {log_path}")
+        c.run("npm run test:e2e", env=environment, pty=False)
+    finally:
+        if process.poll() is None:
+            os.killpg(process.pid, signal.SIGTERM)
+            try:
+                process.wait(timeout=5)
+            except subprocess.TimeoutExpired:
+                os.killpg(process.pid, signal.SIGKILL)
+                process.wait(timeout=5)
+
+
+@task(check_python, check_js, install_browser, browser_e2e)
 def verify(_):
     """Run all automated checks."""
 

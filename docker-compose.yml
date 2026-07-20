@@ -6,6 +6,10 @@ services:
     environment:
       DATABASE_URL: ${DATABASE_URL:-sqlite+aiosqlite:////data/tracy.db}
       TIMEZONE: ${TIMEZONE:-Europe/Berlin}
+      APP_BASE_URL: ${APP_BASE_URL:-http://localhost:8000}
+      WEBAUTHN_RP_ID: ${WEBAUTHN_RP_ID:-localhost}
+      SECRET_KEY: ${SECRET_KEY:-development-only-secret-change-me}
+      SECURE_COOKIES: ${SECURE_COOKIES:-false}
     ports:
       - "8000:8000"
     volumes:

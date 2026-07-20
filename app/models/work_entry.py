@@ -1,6 +1,18 @@
+import uuid
 from datetime import date, datetime
 
-from sqlalchemy import Boolean, CheckConstraint, Date, DateTime, ForeignKey, Integer, String, Text
+from sqlalchemy import (
+    Boolean,
+    CheckConstraint,
+    Date,
+    DateTime,
+    ForeignKey,
+    Integer,
+    String,
+    Text,
+    UniqueConstraint,
+    Uuid,
+)
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.sql import func
 
@@ -9,9 +21,13 @@ from app.core.database import Base
 
 class WorkEntry(Base):
     __tablename__ = "work_entries"
+    __table_args__ = (UniqueConstraint("user_id", "work_date", name="uq_work_entries_user_date"),)
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    work_date: Mapped[date] = mapped_column(Date, nullable=False, unique=True, index=True)
+    user_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid, ForeignKey("users.id", ondelete="CASCADE"), index=True
+    )
+    work_date: Mapped[date] = mapped_column(Date, nullable=False, index=True)
     check_in_minutes: Mapped[int | None] = mapped_column(Integer)
     check_out_minutes: Mapped[int | None] = mapped_column(Integer)
     check_out_next_day: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
