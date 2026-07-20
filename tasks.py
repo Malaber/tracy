@@ -194,7 +194,9 @@ def browser_e2e(
     with log_path.open("w", encoding="utf-8") as log_file:
         process = subprocess.Popen(
             [
-                str(ROOT / ".venv" / "bin" / "uvicorn"),
+                sys.executable,
+                "-m",
+                "uvicorn",
                 "app.main:app",
                 "--host",
                 "127.0.0.1",
