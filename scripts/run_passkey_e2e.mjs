@@ -90,9 +90,13 @@ async function main() {
       page,
       /\/api\/v1\/auth\/register\/options$/,
     ).then((response) => assert(response.ok(), "Registration options request should pass"));
+    const initialEntry = page.waitForResponse((response) =>
+      response.request().method() === "GET" && /\/api\/v1\/entries\/\d{4}-\d{2}-\d{2}$/.test(response.url())
+    ).then((response) => assert(response.ok(), "Initial protected entry request should pass"));
     await Promise.all([
       page.waitForURL(new URL("/", baseUrl).toString()),
       registerOptions,
+      initialEntry,
       page.locator('[data-passkey-register] button[type="submit"]').click(),
     ]);
     assert.equal(await credentialCount(authenticator), 1);
@@ -106,7 +110,8 @@ async function main() {
       response.request().method() === "PUT" && /\/api\/v1\/entries\//.test(response.url())
     );
     await page.locator("#saveEntry").click();
-    assert((await saveResponse).ok(), "Protected tracker save should succeed");
+    const saved = await saveResponse;
+    assert(saved.ok(), `Protected tracker save failed: ${saved.status()} ${await saved.text()}`);
 
     log("Adding and renaming passkey on second authenticator");
     await page.goto(new URL("/security", baseUrl).toString(), { waitUntil: "networkidle" });
