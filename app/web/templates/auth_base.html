@@ -6,6 +6,7 @@
   <meta name="theme-color" content="#172554">
   <title>{% block title %}{{ app_name }}{% endblock %}</title>
   <link rel="icon" href="/static/img/tracy.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/api/v1/auth/assets/fastpasskey.css">
   <link rel="stylesheet" href="/static/app.css">
 </head>
 <body>
@@ -26,12 +27,7 @@
   <main class="auth-main">{% block content %}{% endblock %}</main>
   <script type="module">
     import { initFastPasskey } from "/api/v1/auth/assets/fastpasskey.js";
-    initFastPasskey({
-      translate: (_key, values, fallback) => Object.entries(values).reduce(
-        (text, [name, value]) => text.replaceAll(`{${name}}`, String(value)),
-        fallback,
-      ),
-    });
+    initFastPasskey();
   </script>
 </body>
 </html>

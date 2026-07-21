@@ -138,19 +138,6 @@ class TracyPasskeyRepository:
         )
         await self.db.commit()
 
-    async def add_link_user(self, _token: str) -> None:
-        return None
-
-    async def complete_add_link(
-        self,
-        *,
-        token: str,
-        user_id: UUID,
-        name: str,
-        credential: PasskeyCredential,
-    ) -> None:
-        return None
-
     async def authenticate(self, request: Request, user: User) -> User:
         await create_auth_session(request, self.db, user)
         return user

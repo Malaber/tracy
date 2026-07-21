@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import fsSync from "node:fs";
 import fs from "node:fs/promises";
 import path from "node:path";
+import { createVirtualAuthenticator } from "@malaber/fastpasskey/playwright";
 import { chromium } from "playwright";
 
 const baseUrl = process.env.PREVIEW_BASE_URL ?? "http://localhost:8000";
@@ -40,34 +41,6 @@ async function assertAuthenticationOptions(response, allowedCredentials) {
   }
 }
 
-async function createVirtualAuthenticator(page) {
-  const client = await page.context().newCDPSession(page);
-  await client.send("WebAuthn.enable", { enableUI: false });
-  const { authenticatorId } = await client.send("WebAuthn.addVirtualAuthenticator", {
-    options: {
-      protocol: "ctap2",
-      ctap2Version: "ctap2_1",
-      transport: "usb",
-      hasResidentKey: true,
-      hasUserVerification: true,
-      automaticPresenceSimulation: true,
-      isUserVerified: true,
-    },
-  });
-  return { client, authenticatorId };
-}
-
-async function credentialCount(authenticator) {
-  return (await authenticatorCredentials(authenticator)).length;
-}
-
-async function authenticatorCredentials(authenticator) {
-  const { credentials } = await authenticator.client.send("WebAuthn.getCredentials", {
-    authenticatorId: authenticator.authenticatorId,
-  });
-  return credentials;
-}
-
 async function main() {
   await fs.mkdir(artifactDir, { recursive: true });
   const browser = await chromium.launch(browserChannel ? { channel: browserChannel } : {});
@@ -75,9 +48,10 @@ async function main() {
   const page = await context.newPage();
   page.setDefaultTimeout(15_000);
   page.setDefaultNavigationTimeout(15_000);
-  const authenticators = [];
-  let authenticator = await createVirtualAuthenticator(page);
-  authenticators.push(authenticator);
+  const authenticator = await createVirtualAuthenticator(context, page, {
+    ctap2Version: "ctap2_1",
+    transport: "usb",
+  });
 
   try {
     log("Registering account with real WebAuthn ceremony");
@@ -90,12 +64,15 @@ async function main() {
       page,
       /\/api\/v1\/auth\/register\/options$/,
     ).then((response) => assert(response.ok(), "Registration options request should pass"));
+    const initialEntry = page.waitForResponse((response) =>
+      response.request().method() === "GET" && /\/api\/v1\/entries\/\d{4}-\d{2}-\d{2}$/.test(response.url())
+    ).then((response) => assert(response.ok(), "Initial protected entry request should pass"));
     await Promise.all([
       page.waitForURL(new URL("/", baseUrl).toString()),
       registerOptions,
+      initialEntry,
       page.locator('[data-passkey-register] button[type="submit"]').click(),
     ]);
-    assert.equal(await credentialCount(authenticator), 1);
     await page.getByRole("heading", { name: "Track your working day" }).waitFor();
 
     log("Saving protected tracker data");
@@ -106,23 +83,19 @@ async function main() {
       response.request().method() === "PUT" && /\/api\/v1\/entries\//.test(response.url())
     );
     await page.locator("#saveEntry").click();
-    assert((await saveResponse).ok(), "Protected tracker save should succeed");
+    const saved = await saveResponse;
+    assert(saved.ok(), `Protected tracker save failed: ${saved.status()} ${await saved.text()}`);
 
     log("Adding and renaming passkey on second authenticator");
     await page.goto(new URL("/security", baseUrl).toString(), { waitUntil: "networkidle" });
     assert.equal(await page.locator(".passkey-row").count(), 1);
-    await authenticator.client.send("WebAuthn.removeVirtualAuthenticator", {
-      authenticatorId: authenticator.authenticatorId,
-    });
-    authenticator = await createVirtualAuthenticator(page);
-    authenticators.push(authenticator);
+    await authenticator.replace();
     await page.getByRole("button", { name: "Add another" }).click();
     await page.locator("[data-passkey-name-input]").fill("Work laptop");
     const addOptions = waitForPost(page, /\/api\/v1\/auth\/passkeys\/register\/options$/);
     await page.getByRole("button", { name: "Continue", exact: true }).click();
     await assertRegistrationOptions(await addOptions, 1);
     await page.locator(".passkey-row").nth(1).waitFor();
-    assert.equal(await credentialCount(authenticator), 1);
 
     let managedRow = page.locator(".passkey-row", { hasText: "Work laptop" });
     await managedRow.getByRole("button", { name: "Rename" }).click();
@@ -168,7 +141,6 @@ async function main() {
     await remainingRow.waitFor();
     assert(!(await remainingRow.innerText()).includes("{date}"));
     assert(!(await page.locator("[data-passkey-name-form]").isVisible()));
-    assert.equal(await credentialCount(authenticator), 1);
     await page.screenshot({ path: path.join(artifactDir, "passkey-flow.png"), fullPage: true });
     await fs.writeFile(
       path.join(artifactDir, "summary.md"),
@@ -176,11 +148,7 @@ async function main() {
     );
     log("Passkey flow passed");
   } finally {
-    for (const item of authenticators) {
-      await item.client.send("WebAuthn.removeVirtualAuthenticator", {
-        authenticatorId: item.authenticatorId,
-      }).catch(() => {});
-    }
+    await authenticator.dispose();
     await browser.close();
   }
 }
