@@ -116,3 +116,9 @@ async def test_authentication_gates_web_and_api(unauthenticated_client):
     asset = await unauthenticated_client.get("/api/v1/auth/assets/fastpasskey.js")
     assert asset.status_code == 200
     assert "navigator.credentials.create" in asset.text
+    styles = await unauthenticated_client.get("/api/v1/auth/assets/fastpasskey.css")
+    assert styles.status_code == 200
+    assert "[hidden]" in styles.text
+    assert (
+        await unauthenticated_client.post("/api/v1/auth/passkey-add/unsupported/options")
+    ).status_code == 404

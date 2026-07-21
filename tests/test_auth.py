@@ -173,16 +173,6 @@ async def test_repository_adopts_legacy_rows_and_manages_passkeys(auth_db):
         ),
     )
     assert [entry.name for entry in replaced.passkeys] == ["Replacement"]
-    assert await repository.add_link_user("unsupported") is None
-    assert (
-        await repository.complete_add_link(
-            token="unsupported",
-            user_id=user.id,
-            name="Ignored",
-            credential=first_credential,
-        )
-        is None
-    )
 
     request = _request()
     assert await repository.authenticate(request, user) is user

@@ -21,5 +21,6 @@ router = create_passkey_router(
         service_factory=_passkey_service,
         repository_dependency=get_passkey_repository,
         current_user_dependency=get_current_user,
+        enable_add_link_routes=False,
     )
 )

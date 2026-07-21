@@ -10,6 +10,7 @@
     "test:e2e": "node scripts/run_passkey_e2e.mjs"
   },
   "devDependencies": {
+    "@malaber/fastpasskey": "https://github.com/Malaber/python-libs/releases/download/fastpasskey-v0.2.6/malaber-fastpasskey-0.2.6.tgz",
     "jsdom": "^29.0.0",
     "playwright": "^1.61.1"
   }
