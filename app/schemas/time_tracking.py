@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from datetime import date
 from typing import Literal
 
 from pydantic import BaseModel, Field, field_validator, model_validator
@@ -62,6 +63,19 @@ class WorkEntryPayload(BaseModel):
             self.check_out_next_day,
             [item.normalized() for item in self.breaks],
         )
+        return self
+
+
+class DayOffRangePayload(BaseModel):
+    start: date
+    end: date
+
+    @model_validator(mode="after")
+    def validate_range(self) -> "DayOffRangePayload":
+        if self.end < self.start:
+            raise ValueError("End date must be on or after start date.")
+        if (self.end - self.start).days > 732:
+            raise ValueError("Date range is limited to two years.")
         return self
 
 

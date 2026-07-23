@@ -102,7 +102,10 @@
 
             <div id="formError" class="form-error" role="alert" hidden></div>
             <div class="entry-actions">
-              <button id="deleteDay" class="danger-button" type="button">Clear day</button>
+              <div class="entry-secondary-actions">
+                <button id="deleteDay" class="danger-button" type="button">Clear day</button>
+                <button id="vacationAction" class="secondary-button vacation-button" type="button" aria-pressed="false">Mark vacation</button>
+              </div>
               <button id="saveEntry" class="primary-button" type="button">Save working day</button>
             </div>
           </section>
@@ -140,7 +143,7 @@
           <div>
             <p class="eyebrow">Overview</p>
             <h1>Statistics</h1>
-            <p>Working time, targets, weekends, and German public holidays in one view.</p>
+            <p>Working time, targets, vacation, weekends, and German public holidays in one view.</p>
           </div>
           <div class="stats-controls">
             <div class="period-switcher" role="group" aria-label="Statistics period">
@@ -180,8 +183,9 @@
               <div><dt>Working days</dt><dd id="calendarWorkdays">—</dd></div>
               <div><dt>Weekend days</dt><dd id="calendarWeekends">—</dd></div>
               <div><dt>Holidays on weekdays</dt><dd id="calendarHolidays">—</dd></div>
+              <div><dt>Vacation weekdays</dt><dd id="calendarDaysOff">—</dd></div>
             </dl>
-            <p class="calendar-note">Uses national and state-wide German holidays. Local municipal exceptions are not automatically deducted.</p>
+            <p class="calendar-note">Public holidays and marked vacation weekdays reduce your target. Local municipal holiday exceptions are not automatically deducted.</p>
           </section>
         </div>
 
@@ -224,6 +228,31 @@
         <h2>Clear this working day?</h2>
         <p>The stored times, breaks, and note for this date will be removed.</p>
         <div class="modal-actions"><button class="secondary-button close-delete" type="button">Keep it</button><button id="confirmDelete" class="danger-button filled" type="button">Clear day</button></div>
+      </form>
+    </dialog>
+
+    <dialog id="vacationDialog" class="modal" aria-labelledby="vacationHeading">
+      <form id="vacationForm" method="dialog">
+        <div class="modal-heading">
+          <div><p class="eyebrow">Days off</p><h2 id="vacationHeading">Manage vacation</h2></div>
+          <button class="icon-button close-vacation" type="button" aria-label="Close">×</button>
+        </div>
+        <p class="modal-copy">Choose one date or a range. Marked weekdays have no target hours, and you can still record work when needed.</p>
+        <div class="date-range-fields">
+          <label for="vacationStart">From
+            <input id="vacationStart" type="date" required>
+          </label>
+          <label for="vacationEnd">Through
+            <input id="vacationEnd" type="date" required>
+          </label>
+        </div>
+        <div id="vacationError" class="form-error" role="alert" hidden></div>
+        <p id="vacationRemovalHint" class="field-help removal-confirmation" role="status" aria-live="polite" hidden></p>
+        <div class="modal-actions vacation-actions">
+          <button class="secondary-button close-vacation" type="button">Cancel</button>
+          <button id="removeVacation" class="danger-button" type="button">Remove vacation</button>
+          <button id="confirmVacation" class="primary-button" type="submit">Mark vacation</button>
+        </div>
       </form>
     </dialog>
 

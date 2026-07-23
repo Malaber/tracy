@@ -2,19 +2,20 @@ from __future__ import annotations
 
 import csv
 import io
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from uuid import UUID
 from zoneinfo import ZoneInfo
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
-from sqlalchemy import select
+from sqlalchemy import delete, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_current_user
 from app.core.config import settings
 from app.core.database import get_db
-from app.models import BreakEntry, Preferences, User, WorkEntry
-from app.schemas.time_tracking import PreferencesPayload, WorkEntryPayload
+from app.models import BreakEntry, DayOff, Preferences, User, WorkEntry
+from app.schemas.time_tracking import DayOffRangePayload, PreferencesPayload, WorkEntryPayload
 from app.services.german_holidays import FEDERAL_STATES
 from app.services.statistics import build_statistics, period_bounds
 from app.services.time_calculation import (
@@ -48,6 +49,29 @@ def _preferences_payload(item: Preferences) -> dict:
     }
 
 
+def _validate_date_range(start: date, end: date) -> None:
+    if end < start:
+        raise HTTPException(status_code=422, detail="End date must be on or after start date.")
+    if (end - start).days > 732:
+        raise HTTPException(status_code=422, detail="Date range is limited to two years.")
+
+
+async def _day_off_dates(db: AsyncSession, user_id: UUID, start: date, end: date) -> set[date]:
+    result = await db.execute(
+        select(DayOff.day_off_date)
+        .where(
+            DayOff.user_id == user_id,
+            DayOff.day_off_date.between(start, end),
+        )
+        .order_by(DayOff.day_off_date)
+    )
+    return set(result.scalars().all())
+
+
+def _days_off_payload(days_off: set[date]) -> dict:
+    return {"days_off": [day.isoformat() for day in sorted(days_off)]}
+
+
 def _break_to_payload(item: BreakEntry) -> dict:
     return {
         "id": item.id,
@@ -58,11 +82,14 @@ def _break_to_payload(item: BreakEntry) -> dict:
     }
 
 
-def _entry_to_payload(entry: WorkEntry | None, work_date: date, rounding: int) -> dict:
+def _entry_to_payload(
+    entry: WorkEntry | None, work_date: date, rounding: int, *, is_day_off: bool = False
+) -> dict:
     if entry is None:
         return {
             "saved": False,
             "date": work_date.isoformat(),
+            "is_day_off": is_day_off,
             "check_in": None,
             "check_out": None,
             "check_out_next_day": False,
@@ -98,6 +125,7 @@ def _entry_to_payload(entry: WorkEntry | None, work_date: date, rounding: int) -
     return {
         "saved": True,
         "date": entry.work_date.isoformat(),
+        "is_day_off": is_day_off,
         "check_in": format_clock_time(entry.check_in_minutes),
         "check_out": format_clock_time(entry.check_out_minutes),
         "check_out_next_day": entry.check_out_next_day,
@@ -149,6 +177,74 @@ async def update_preferences(
     return _preferences_payload(item)
 
 
+@router.get("/days-off")
+async def list_days_off(
+    start: date,
+    end: date,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+) -> dict:
+    _validate_date_range(start, end)
+    return _days_off_payload(await _day_off_dates(db, user.id, start, end))
+
+
+@router.put("/days-off")
+async def mark_days_off(
+    payload: DayOffRangePayload,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+) -> dict:
+    existing = await _day_off_dates(db, user.id, payload.start, payload.end)
+    requested = [
+        payload.start + timedelta(days=offset)
+        for offset in range((payload.end - payload.start).days + 1)
+    ]
+    missing = [day for day in requested if day not in existing]
+    if missing:
+        db.add_all(DayOff(user_id=user.id, day_off_date=day) for day in missing)
+        try:
+            await db.commit()
+        except IntegrityError:
+            # An overlapping request may have inserted one of the same dates after our
+            # initial read. Retry the remaining dates under savepoints so the PUT stays
+            # idempotent without relying on database-specific conflict syntax.
+            await db.rollback()
+            existing = await _day_off_dates(db, user.id, payload.start, payload.end)
+            for day in requested:
+                if day in existing:
+                    continue
+                try:
+                    async with db.begin_nested():
+                        db.add(DayOff(user_id=user.id, day_off_date=day))
+                        await db.flush()
+                except IntegrityError:
+                    pass
+            await db.commit()
+            recovered = await _day_off_dates(db, user.id, payload.start, payload.end)
+            if not set(requested).issubset(recovered):
+                raise
+            return _days_off_payload(recovered)
+    return _days_off_payload(await _day_off_dates(db, user.id, payload.start, payload.end))
+
+
+@router.delete("/days-off", status_code=status.HTTP_204_NO_CONTENT)
+async def clear_days_off(
+    start: date,
+    end: date,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+) -> Response:
+    _validate_date_range(start, end)
+    await db.execute(
+        delete(DayOff).where(
+            DayOff.user_id == user.id,
+            DayOff.day_off_date.between(start, end),
+        )
+    )
+    await db.commit()
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
 @router.get("/entries")
 async def list_entries(
     start: date,
@@ -156,11 +252,9 @@ async def list_entries(
     db: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
 ) -> list[dict]:
-    if end < start:
-        raise HTTPException(status_code=422, detail="End date must be on or after start date.")
-    if (end - start).days > 732:
-        raise HTTPException(status_code=422, detail="Date range is limited to two years.")
+    _validate_date_range(start, end)
     preferences = await _preferences(db, user.id)
+    day_off_dates = await _day_off_dates(db, user.id, start, end)
     result = await db.execute(
         select(WorkEntry)
         .where(
@@ -170,7 +264,12 @@ async def list_entries(
         .order_by(WorkEntry.work_date.desc())
     )
     return [
-        _entry_to_payload(entry, entry.work_date, preferences.rounding_minutes)
+        _entry_to_payload(
+            entry,
+            entry.work_date,
+            preferences.rounding_minutes,
+            is_day_off=entry.work_date in day_off_dates,
+        )
         for entry in result.scalars().all()
     ]
 
@@ -183,7 +282,13 @@ async def get_entry(
 ) -> dict:
     preferences = await _preferences(db, user.id)
     entry = await _entry_for_date(db, user.id, work_date)
-    return _entry_to_payload(entry, work_date, preferences.rounding_minutes)
+    day_off_dates = await _day_off_dates(db, user.id, work_date, work_date)
+    return _entry_to_payload(
+        entry,
+        work_date,
+        preferences.rounding_minutes,
+        is_day_off=work_date in day_off_dates,
+    )
 
 
 @router.put("/entries/{work_date}")
@@ -208,7 +313,13 @@ async def upsert_entry(
     await db.commit()
     await db.refresh(entry)
     preferences = await _preferences(db, user.id)
-    return _entry_to_payload(entry, work_date, preferences.rounding_minutes)
+    day_off_dates = await _day_off_dates(db, user.id, work_date, work_date)
+    return _entry_to_payload(
+        entry,
+        work_date,
+        preferences.rounding_minutes,
+        is_day_off=work_date in day_off_dates,
+    )
 
 
 @router.delete("/entries/{work_date}", status_code=status.HTTP_204_NO_CONTENT)
@@ -241,7 +352,13 @@ async def check_in(
     await db.commit()
     await db.refresh(entry)
     preferences = await _preferences(db, user.id)
-    return _entry_to_payload(entry, work_date, preferences.rounding_minutes)
+    day_off_dates = await _day_off_dates(db, user.id, work_date, work_date)
+    return _entry_to_payload(
+        entry,
+        work_date,
+        preferences.rounding_minutes,
+        is_day_off=work_date in day_off_dates,
+    )
 
 
 @router.post("/entries/{work_date}/check-out")
@@ -263,7 +380,13 @@ async def check_out(
     await db.commit()
     await db.refresh(entry)
     preferences = await _preferences(db, user.id)
-    return _entry_to_payload(entry, work_date, preferences.rounding_minutes)
+    day_off_dates = await _day_off_dates(db, user.id, work_date, work_date)
+    return _entry_to_payload(
+        entry,
+        work_date,
+        preferences.rounding_minutes,
+        is_day_off=work_date in day_off_dates,
+    )
 
 
 @router.get("/statistics")
@@ -285,6 +408,7 @@ async def get_statistics(
         raise HTTPException(status_code=422, detail="Choose a valid range of up to two years.")
 
     preferences = await _preferences(db, user.id)
+    day_off_dates = await _day_off_dates(db, user.id, range_start, range_end)
     result = await db.execute(
         select(WorkEntry).where(
             WorkEntry.user_id == user.id,
@@ -292,7 +416,12 @@ async def get_statistics(
         )
     )
     entries = {
-        entry.work_date: _entry_to_payload(entry, entry.work_date, preferences.rounding_minutes)
+        entry.work_date: _entry_to_payload(
+            entry,
+            entry.work_date,
+            preferences.rounding_minutes,
+            is_day_off=entry.work_date in day_off_dates,
+        )
         for entry in result.scalars().all()
     }
     return build_statistics(
@@ -301,6 +430,7 @@ async def get_statistics(
         entries,
         federal_state=preferences.federal_state,
         daily_target_minutes=preferences.daily_target_minutes,
+        day_off_dates=day_off_dates,
     )
 
 
@@ -329,7 +459,14 @@ async def export_statistics(
         ]
     )
     for day in data["days"]:
-        calendar = day["holiday"] or ("Weekend" if day["is_weekend"] else "Working day")
+        calendar_parts = ["Day off"] if day["is_day_off"] else []
+        if day["holiday"]:
+            calendar_parts.append(day["holiday"])
+        elif day["is_weekend"]:
+            calendar_parts.append("Weekend")
+        elif not day["is_day_off"]:
+            calendar_parts.append("Working day")
+        calendar = "; ".join(calendar_parts)
         writer.writerow(
             [
                 day["date"],
