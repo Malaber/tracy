@@ -82,6 +82,116 @@ async def test_entry_lifecycle_and_statistics(client):
 
 
 @pytest.mark.asyncio
+async def test_day_off_range_lifecycle_preserves_recorded_work(client):
+    first = await client.put(
+        "/api/v1/days-off",
+        json={"start": "2026-07-14", "end": "2026-07-16"},
+    )
+    assert first.status_code == 200, first.text
+    assert first.json() == {"days_off": ["2026-07-14", "2026-07-15", "2026-07-16"]}
+
+    overlapping = await client.put(
+        "/api/v1/days-off",
+        json={"start": "2026-07-15", "end": "2026-07-17"},
+    )
+    assert overlapping.status_code == 200, overlapping.text
+    assert overlapping.json() == {"days_off": ["2026-07-15", "2026-07-16", "2026-07-17"]}
+    listed = await client.get("/api/v1/days-off?start=2026-07-13&end=2026-07-17")
+    assert listed.json() == {
+        "days_off": [
+            "2026-07-14",
+            "2026-07-15",
+            "2026-07-16",
+            "2026-07-17",
+        ]
+    }
+
+    recorded = await client.put(
+        "/api/v1/entries/2026-07-15",
+        json={
+            "check_in": "08:00",
+            "check_out": "10:00",
+            "breaks": [],
+            "notes": "Vacation support",
+        },
+    )
+    assert recorded.status_code == 200, recorded.text
+    assert recorded.json()["is_day_off"] is True
+    assert recorded.json()["exact_minutes"] == 120
+
+    statistics = (await client.get("/api/v1/statistics?period=week&anchor=2026-07-15")).json()
+    assert statistics["summary"]["expected_workdays"] == 1
+    assert statistics["summary"]["day_off_workdays"] == 4
+    assert statistics["summary"]["target_minutes"] == 480
+    worked_day_off = statistics["days"][2]
+    assert worked_day_off["is_day_off"] is True
+    assert worked_day_off["expected_minutes"] == 0
+    assert worked_day_off["balance_minutes"] == 120
+
+    exported = await client.get("/api/v1/statistics/export.csv?period=week&anchor=2026-07-15")
+    assert "2026-07-15,Wednesday,Day off,2.00,2.00,0.00,2.00,Vacation support" in exported.text
+
+    cleared = await client.delete("/api/v1/days-off?start=2026-07-15&end=2026-07-16")
+    assert cleared.status_code == 204
+    assert (await client.get("/api/v1/days-off?start=2026-07-13&end=2026-07-17")).json() == {
+        "days_off": ["2026-07-14", "2026-07-17"]
+    }
+    preserved = (await client.get("/api/v1/entries/2026-07-15")).json()
+    assert preserved["saved"] is True
+    assert preserved["is_day_off"] is False
+    assert preserved["exact_minutes"] == 120
+    assert (
+        await client.delete("/api/v1/days-off?start=2026-07-15&end=2026-07-16")
+    ).status_code == 204
+
+
+@pytest.mark.asyncio
+async def test_day_off_range_validation(client):
+    assert (await client.get("/api/v1/days-off?start=2026-07-20&end=2026-07-01")).status_code == 422
+    assert (
+        await client.put(
+            "/api/v1/days-off",
+            json={"start": "2026-07-20", "end": "2026-07-01"},
+        )
+    ).status_code == 422
+    assert (
+        await client.put(
+            "/api/v1/days-off",
+            json={"start": "2024-01-01", "end": "2027-01-01"},
+        )
+    ).status_code == 422
+    assert (
+        await client.delete("/api/v1/days-off?start=2024-01-01&end=2027-01-01")
+    ).status_code == 422
+    maximum_date = await client.put(
+        "/api/v1/days-off",
+        json={"start": "9999-12-31", "end": "9999-12-31"},
+    )
+    assert maximum_date.status_code == 200, maximum_date.text
+    assert maximum_date.json() == {"days_off": ["9999-12-31"]}
+
+
+@pytest.mark.asyncio
+async def test_day_off_csv_keeps_overlapping_calendar_labels(client):
+    for day in ("2026-07-18", "2026-12-25"):
+        response = await client.put(
+            "/api/v1/days-off",
+            json={"start": day, "end": day},
+        )
+        assert response.status_code == 200, response.text
+
+    weekend = await client.get(
+        "/api/v1/statistics/export.csv" "?period=custom&start=2026-07-18&end=2026-07-18"
+    )
+    assert "2026-07-18,Saturday,Day off; Weekend" in weekend.text
+
+    holiday = await client.get(
+        "/api/v1/statistics/export.csv" "?period=custom&start=2026-12-25&end=2026-12-25"
+    )
+    assert "2026-12-25,Friday,Day off; Christmas Day" in holiday.text
+
+
+@pytest.mark.asyncio
 async def test_in_progress_actions_and_validation(client):
     work_date = date.today().isoformat()
     assert (await client.post(f"/api/v1/entries/{work_date}/check-out")).status_code == 409
@@ -113,6 +223,9 @@ async def test_authentication_gates_web_and_api(unauthenticated_client):
     assert "Sign in with passkey" in login.text
     assert "Create passkey" in login.text
     assert (await unauthenticated_client.get("/api/v1/preferences")).status_code == 401
+    assert (
+        await unauthenticated_client.get("/api/v1/days-off?start=2026-07-01&end=2026-07-01")
+    ).status_code == 401
     asset = await unauthenticated_client.get("/api/v1/auth/assets/fastpasskey.js")
     assert asset.status_code == 200
     assert "navigator.credentials.create" in asset.text

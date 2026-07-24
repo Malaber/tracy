@@ -1,7 +1,14 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { calculateDraft, formatDuration, localISODate, parseClock, roundUp } from "./app.js";
+import {
+  calculateDraft,
+  formatDuration,
+  localISODate,
+  parseClock,
+  roundUp,
+  validateDateRange,
+} from "./app.js";
 
 
 test("parseClock supports the calculator formats", () => {
@@ -44,4 +51,20 @@ test("calculateDraft handles breaks, rounding, overnight ranges, and incomplete 
   assert.throws(() => calculateDraft({ checkIn: "8", checkOut: "9", nextDay: false, breaks: [{ mode: "range", start: "", end: "8:30" }], rounding: 15 }), /need a start/);
   assert.throws(() => calculateDraft({ checkIn: "8", checkOut: "9", nextDay: false, breaks: [{ mode: "range", start: "8:30", end: "8:30" }], rounding: 15 }), /later/);
   assert.throws(() => calculateDraft({ checkIn: "8", checkOut: "9", nextDay: false, breaks: [{ mode: "duration", duration_minutes: 60 }], rounding: 15 }), /shorter/);
+});
+
+test("validateDateRange accepts one or multiple dates and rejects invalid ranges", () => {
+  assert.deepEqual(validateDateRange("2026-07-18", "2026-07-18"), {
+    start: "2026-07-18",
+    end: "2026-07-18",
+    dayCount: 1,
+  });
+  assert.deepEqual(validateDateRange(" 2026-07-18 ", "2026-07-20"), {
+    start: "2026-07-18",
+    end: "2026-07-20",
+    dayCount: 3,
+  });
+  assert.throws(() => validateDateRange("", "2026-07-20"), /both a start and end/);
+  assert.throws(() => validateDateRange("2026-02-30", "2026-03-02"), /valid calendar/);
+  assert.throws(() => validateDateRange("2026-07-20", "2026-07-18"), /on or after/);
 });

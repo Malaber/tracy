@@ -31,6 +31,7 @@ def build_statistics(
     *,
     federal_state: str,
     daily_target_minutes: int,
+    day_off_dates: set[date] | None = None,
 ) -> dict[str, Any]:
     if end < start:
         raise ValueError("End date must be on or after start date.")
@@ -38,6 +39,7 @@ def build_statistics(
         raise ValueError("Statistics ranges are limited to two years.")
 
     holidays = holidays_between(start, end, federal_state)
+    day_off_dates = day_off_dates or set()
     days: list[dict[str, Any]] = []
     weekly: dict[date, dict[str, int]] = defaultdict(
         lambda: {"exact_minutes": 0, "billable_minutes": 0, "target_minutes": 0}
@@ -49,17 +51,22 @@ def build_statistics(
     calendar_days = 0
     weekend_days = 0
     holiday_workdays = 0
+    day_off_workdays = 0
 
     current = start
     while current <= end:
         calendar_days += 1
         weekend = current.weekday() >= 5
         holiday = holidays.get(current)
-        workday = is_workday(current, holidays)
+        baseline_workday = is_workday(current, holidays)
+        day_off = current in day_off_dates
+        workday = baseline_workday and not day_off
         if weekend:
             weekend_days += 1
         if holiday and not weekend:
             holiday_workdays += 1
+        if day_off and baseline_workday:
+            day_off_workdays += 1
         expected = daily_target_minutes if workday else 0
         target_minutes += expected
 
@@ -81,6 +88,7 @@ def build_statistics(
                 "weekday": current.strftime("%A"),
                 "is_weekend": weekend,
                 "holiday": holiday,
+                "is_day_off": day_off,
                 "is_workday": workday,
                 "expected_minutes": expected,
                 "exact_minutes": exact,
@@ -101,6 +109,7 @@ def build_statistics(
             "expected_workdays": expected_workdays,
             "weekend_days": weekend_days,
             "holiday_workdays": holiday_workdays,
+            "day_off_workdays": day_off_workdays,
             "completed_days": completed_days,
             "exact_minutes": total_exact,
             "billable_minutes": total_billable,

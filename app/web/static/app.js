@@ -84,6 +84,33 @@ function shiftDate(value, days) {
   return localISODate(date);
 }
 
+export function validateDateRange(start, end) {
+  const normalizedStart = String(start ?? "").trim();
+  const normalizedEnd = String(end ?? "").trim();
+  if (!normalizedStart || !normalizedEnd) {
+    throw new Error("Choose both a start and end date.");
+  }
+  const datePattern = /^\d{4}-\d{2}-\d{2}$/;
+  const validDate = (value) => {
+    if (!datePattern.test(value)) return false;
+    const parsed = dateFromISO(value);
+    return !Number.isNaN(parsed.getTime()) && localISODate(parsed) === value;
+  };
+  if (!validDate(normalizedStart) || !validDate(normalizedEnd)) {
+    throw new Error("Choose valid calendar dates.");
+  }
+  if (normalizedEnd < normalizedStart) {
+    throw new Error("The end date must be on or after the start date.");
+  }
+  const startMilliseconds = Date.parse(`${normalizedStart}T00:00:00Z`);
+  const endMilliseconds = Date.parse(`${normalizedEnd}T00:00:00Z`);
+  return {
+    start: normalizedStart,
+    end: normalizedEnd,
+    dayCount: Math.round((endMilliseconds - startMilliseconds) / 86_400_000) + 1,
+  };
+}
+
 function escapeHtml(value) {
   return String(value)
     .replaceAll("&", "&amp;")
@@ -151,13 +178,23 @@ function updateDateHeading() {
   }).format(date);
 }
 
-function setDayStatus(status) {
+function setDayStatus(status, isDayOff = false) {
   const statusEl = byId("dayStatus");
   const labels = {
     empty: "No time saved for this day",
     in_progress: "Working day in progress",
     complete: "Working day complete",
   };
+  if (isDayOff) {
+    const vacationLabels = {
+      empty: "Vacation — no target hours",
+      in_progress: "Vacation · Work in progress",
+      complete: "Vacation · Working time saved",
+    };
+    statusEl.className = "day-status is-vacation";
+    statusEl.lastElementChild.textContent = vacationLabels[status] || vacationLabels.empty;
+    return;
+  }
   statusEl.className = `day-status is-${status === "in_progress" ? "progress" : status}`;
   statusEl.lastElementChild.textContent = labels[status] || labels.empty;
 }
@@ -267,8 +304,12 @@ function renderEntry(entry) {
   byId("breakList").replaceChildren();
   entry.breaks.forEach(addBreakRow);
   updateEmptyBreaks();
-  setDayStatus(entry.status);
+  setDayStatus(entry.status, entry.is_day_off);
   byId("deleteDay").disabled = !entry.saved;
+  const vacationAction = byId("vacationAction");
+  vacationAction.classList.toggle("is-active", entry.is_day_off);
+  vacationAction.setAttribute("aria-pressed", String(Boolean(entry.is_day_off)));
+  vacationAction.textContent = entry.is_day_off ? "Manage vacation" : "Mark vacation";
   updateLiveSummary();
 }
 
@@ -329,17 +370,116 @@ async function deleteDay() {
   }
 }
 
+function showVacationError(message = "") {
+  const error = byId("vacationError");
+  error.textContent = message;
+  error.hidden = !message;
+}
+
+let pendingVacationRemovalKey = null;
+
+function resetVacationRemovalConfirmation() {
+  pendingVacationRemovalKey = null;
+  const button = byId("removeVacation");
+  button.textContent = "Remove vacation";
+  button.classList.remove("filled");
+  const hint = byId("vacationRemovalHint");
+  hint.textContent = "";
+  hint.hidden = true;
+}
+
+function openVacationDialog() {
+  byId("vacationStart").value = state.currentDate;
+  byId("vacationEnd").value = state.currentDate;
+  showVacationError();
+  resetVacationRemovalConfirmation();
+  byId("vacationDialog").showModal();
+}
+
+async function updateVacation(method, selectedRange = null) {
+  let range = selectedRange;
+  if (range === null) {
+    try {
+      range = validateDateRange(byId("vacationStart").value, byId("vacationEnd").value);
+    } catch (error) {
+      showVacationError(error.message);
+      return;
+    }
+  }
+
+  const markButton = byId("confirmVacation");
+  const removeButton = byId("removeVacation");
+  markButton.disabled = true;
+  removeButton.disabled = true;
+  showVacationError();
+  try {
+    if (method === "PUT") {
+      await api("/days-off", {
+        method,
+        body: JSON.stringify({ start: range.start, end: range.end }),
+      });
+    } else {
+      const query = new URLSearchParams({ start: range.start, end: range.end });
+      await api(`/days-off?${query}`, { method });
+    }
+    byId("vacationDialog").close();
+    await Promise.all([loadEntry(), loadWeekSummary(), loadStatistics()]);
+    const dates = `${range.dayCount} ${range.dayCount === 1 ? "date" : "dates"}`;
+    showToast(method === "PUT" ? `Vacation saved for ${dates}.` : `Vacation removed from ${dates}.`);
+  } catch (error) {
+    showVacationError(error.message);
+  } finally {
+    markButton.disabled = false;
+    removeButton.disabled = false;
+    resetVacationRemovalConfirmation();
+  }
+}
+
+function saveVacation(event) {
+  event.preventDefault();
+  return updateVacation("PUT");
+}
+
+function requestVacationRemoval() {
+  let range;
+  try {
+    range = validateDateRange(byId("vacationStart").value, byId("vacationEnd").value);
+  } catch (error) {
+    showVacationError(error.message);
+    return;
+  }
+  showVacationError();
+  const key = `${range.start}:${range.end}`;
+  if (pendingVacationRemovalKey !== key) {
+    pendingVacationRemovalKey = key;
+    const dates = `${range.dayCount} ${range.dayCount === 1 ? "date" : "dates"}`;
+    byId("removeVacation").textContent = `Confirm remove ${dates}`;
+    byId("removeVacation").classList.add("filled");
+    const hint = byId("vacationRemovalHint");
+    hint.textContent = "This only removes the vacation markers; recorded working time stays saved.";
+    hint.hidden = false;
+    return;
+  }
+  return updateVacation("DELETE", range);
+}
+
 function renderWeekSummary(data) {
   const summary = data.summary;
   byId("weekTotal").textContent = `${formatDuration(summary.exact_minutes, { decimal: true })} / ${formatDuration(summary.target_minutes, { decimal: true })}`;
   byId("weekBalance").textContent = formatDuration(summary.balance_minutes, { signed: true, decimal: true });
   byId("weekBalance").className = `balance-badge ${summary.balance_minutes > 0 ? "is-positive" : summary.balance_minutes < 0 ? "is-negative" : ""}`;
   byId("weekProgress").style.width = `${Math.min(100, summary.completion_percent)}%`;
-  const rows = data.days.filter((day) => day.is_workday || day.status !== "empty").slice(0, 5);
+  const rows = data.days.filter((day) => day.is_workday || day.is_day_off || day.status !== "empty").slice(0, 5);
   byId("recentDays").innerHTML = rows.map((day) => {
     const date = dateFromISO(day.date);
     const letter = new Intl.DateTimeFormat("en", { weekday: "short" }).format(date).slice(0, 1);
-    return `<div class="recent-day ${day.status === "complete" ? "is-complete" : ""}"><div><i>${letter}</i><span>${new Intl.DateTimeFormat("en", { weekday: "short", day: "2-digit" }).format(date)}</span></div><strong>${day.exact_minutes ? formatDuration(day.exact_minutes, { decimal: true }) : "—"}</strong></div>`;
+    const classes = [
+      "recent-day",
+      day.status === "complete" ? "is-complete" : "",
+      day.is_day_off ? "is-vacation" : "",
+    ].filter(Boolean).join(" ");
+    const vacation = day.is_day_off ? '<small class="vacation-label">Vacation</small>' : "";
+    return `<div class="${classes}"><div><i>${letter}</i><span>${new Intl.DateTimeFormat("en", { weekday: "short", day: "2-digit" }).format(date)}${vacation}</span></div><strong>${day.exact_minutes ? formatDuration(day.exact_minutes, { decimal: true }) : "—"}</strong></div>`;
   }).join("");
 }
 
@@ -367,6 +507,7 @@ function renderStatistics(data) {
   byId("calendarWorkdays").textContent = summary.expected_workdays;
   byId("calendarWeekends").textContent = summary.weekend_days;
   byId("calendarHolidays").textContent = summary.holiday_workdays;
+  byId("calendarDaysOff").textContent = summary.day_off_workdays;
 
   const maximum = Math.max(1, ...data.weeks.flatMap((week) => [week.exact_minutes, week.target_minutes]));
   byId("weeklyChart").innerHTML = data.weeks.map((week) => {
@@ -375,12 +516,21 @@ function renderStatistics(data) {
   }).join("");
 
   const visibleDays = state.period === "year"
-    ? data.days.filter((day) => day.status !== "empty" || day.holiday)
+    ? data.days.filter((day) => day.status !== "empty" || day.holiday || day.is_day_off)
     : data.days;
   byId("statisticsDays").innerHTML = visibleDays.map((day) => {
-    const calendar = day.holiday
-      ? `<span class="calendar-pill holiday" title="${escapeHtml(day.holiday)}">${escapeHtml(day.holiday)}</span>`
-      : day.is_weekend ? '<span class="calendar-pill">Weekend</span>' : "Working day";
+    const calendarLabels = [];
+    if (day.is_day_off) {
+      calendarLabels.push('<span class="calendar-pill vacation">Vacation</span>');
+    }
+    if (day.holiday) {
+      calendarLabels.push(`<span class="calendar-pill holiday" title="${escapeHtml(day.holiday)}">${escapeHtml(day.holiday)}</span>`);
+    } else if (day.is_weekend) {
+      calendarLabels.push('<span class="calendar-pill">Weekend</span>');
+    } else if (!day.is_day_off) {
+      calendarLabels.push("Working day");
+    }
+    const calendar = `<span class="calendar-pills">${calendarLabels.join("")}</span>`;
     const balanceClass = day.balance_minutes >= 0 ? "positive" : "negative";
     return `<tr><td><strong>${new Intl.DateTimeFormat("en", { day: "2-digit", month: "short", year: "numeric" }).format(dateFromISO(day.date))}</strong></td><td>${day.weekday}</td><td>${calendar}</td><td>${day.exact_minutes ? formatDuration(day.exact_minutes) : "—"}</td><td>${day.billable_minutes ? formatDuration(day.billable_minutes) : "—"}</td><td class="${balanceClass}">${day.is_workday || day.exact_minutes ? formatDuration(day.balance_minutes, { signed: true }) : "—"}</td></tr>`;
   }).join("");
@@ -465,6 +615,18 @@ async function initialize() {
   byId("checkOutNow").addEventListener("click", () => timeAction("check-out"));
   byId("deleteDay").addEventListener("click", () => byId("deleteDialog").showModal());
   byId("confirmDelete").addEventListener("click", deleteDay);
+  byId("vacationAction").addEventListener("click", openVacationDialog);
+  byId("vacationForm").addEventListener("submit", saveVacation);
+  byId("removeVacation").addEventListener("click", requestVacationRemoval);
+  ["vacationStart", "vacationEnd"].forEach((id) => {
+    byId(id).addEventListener("input", resetVacationRemovalConfirmation);
+  });
+  byId("vacationDialog").querySelectorAll(".close-vacation").forEach((button) => {
+    button.addEventListener("click", () => {
+      resetVacationRemovalConfirmation();
+      byId("vacationDialog").close();
+    });
+  });
   byId("settingsButton").addEventListener("click", openSettings);
   byId("mobileSettingsButton").addEventListener("click", openSettings);
   byId("settingsForm").addEventListener("submit", saveSettings);
