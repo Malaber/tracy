@@ -9,6 +9,7 @@ import {
   needsDefaultBreak,
   parseClock,
   roundUp,
+  validateDateRange,
 } from "./app.js";
 
 
@@ -80,4 +81,20 @@ test("clock fields use native time controls", async () => {
   assert.match(template, /id="checkOut" type="time" step="60"/);
   assert.match(script, /class="break-start" type="time" step="60"/);
   assert.match(script, /class="break-end" type="time" step="60"/);
+});
+
+test("validateDateRange accepts one or multiple dates and rejects invalid ranges", () => {
+  assert.deepEqual(validateDateRange("2026-07-18", "2026-07-18"), {
+    start: "2026-07-18",
+    end: "2026-07-18",
+    dayCount: 1,
+  });
+  assert.deepEqual(validateDateRange(" 2026-07-18 ", "2026-07-20"), {
+    start: "2026-07-18",
+    end: "2026-07-20",
+    dayCount: 3,
+  });
+  assert.throws(() => validateDateRange("", "2026-07-20"), /both a start and end/);
+  assert.throws(() => validateDateRange("2026-02-30", "2026-03-02"), /valid calendar/);
+  assert.throws(() => validateDateRange("2026-07-20", "2026-07-18"), /on or after/);
 });

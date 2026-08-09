@@ -12,6 +12,7 @@ Germany-aware target hours.
 - Week, month, and year statistics
 - CSV export for the selected statistics period
 - German national and selectable state-wide public holidays
+- Personal days off that reduce required target hours
 - Passwordless account access and passkey management through FastPasskey
 - SQLite locally, with PostgreSQL support through SQLAlchemy
 - FastAPI, SQLAlchemy, Alembic, vanilla JavaScript, pytest, and Invoke

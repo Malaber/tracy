@@ -86,6 +86,65 @@ async function main() {
     const saved = await saveResponse;
     assert(saved.ok(), `Protected tracker save failed: ${saved.status()} ${await saved.text()}`);
 
+    log("Marking and removing a vacation date range");
+    const trackedDate = await page.locator("#workDate").inputValue();
+    const followingDate = new Date(`${trackedDate}T00:00:00Z`);
+    followingDate.setUTCDate(followingDate.getUTCDate() + 1);
+    const followingDateISO = followingDate.toISOString().slice(0, 10);
+    await page.locator("#vacationAction").click();
+    await page.locator("#vacationDialog").waitFor({ state: "visible" });
+    assert.equal(await page.locator("#vacationStart").inputValue(), trackedDate);
+    assert.equal(await page.locator("#vacationEnd").inputValue(), trackedDate);
+    await page.locator("#vacationEnd").fill(followingDateISO);
+    await page.screenshot({
+      path: path.join(artifactDir, "vacation-range-dialog.png"),
+      fullPage: true,
+    });
+    const markVacationResponse = page.waitForResponse((response) =>
+      response.request().method() === "PUT"
+      && new URL(response.url()).pathname === "/api/v1/days-off"
+    );
+    await page.locator("#confirmVacation").click();
+    const markedVacation = await markVacationResponse;
+    assert(
+      markedVacation.ok(),
+      `Vacation range save failed with ${markedVacation.status()}`,
+    );
+    assert.deepEqual((await markedVacation.json()).days_off, [trackedDate, followingDateISO]);
+    await page.waitForFunction(
+      () => document.querySelector("#dayStatus")?.textContent?.includes("Vacation"),
+    );
+
+    const followingEntryResponse = page.waitForResponse((response) =>
+      response.request().method() === "GET"
+      && new URL(response.url()).pathname === `/api/v1/entries/${followingDateISO}`
+    );
+    await page.locator("#nextDay").click();
+    assert((await followingEntryResponse).ok(), "Vacation range should include the following date");
+    await page.waitForFunction(
+      (expectedDate) =>
+        document.querySelector("#workDate")?.value === expectedDate
+        && document.querySelector("#dayStatus")?.textContent?.includes("Vacation"),
+      followingDateISO,
+    );
+
+    await page.locator("#vacationAction").click();
+    await page.locator("#vacationStart").fill(trackedDate);
+    const removeVacationResponse = page.waitForResponse((response) =>
+      response.request().method() === "DELETE"
+      && new URL(response.url()).pathname === "/api/v1/days-off"
+    );
+    await page.locator("#removeVacation").click();
+    await page.getByRole("button", { name: "Confirm remove 2 dates" }).click();
+    const removedVacation = await removeVacationResponse;
+    assert(
+      removedVacation.ok(),
+      `Vacation range removal failed with ${removedVacation.status()}`,
+    );
+    await page.waitForFunction(
+      () => !document.querySelector("#dayStatus")?.textContent?.includes("Vacation"),
+    );
+
     log("Adding and renaming passkey on second authenticator");
     await page.goto(new URL("/security", baseUrl).toString(), { waitUntil: "networkidle" });
     assert.equal(await page.locator(".passkey-row").count(), 1);

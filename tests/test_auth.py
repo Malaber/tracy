@@ -89,6 +89,11 @@ async def test_passkey_registration_login_and_user_data_isolation(
         json={"check_in": "08:00", "check_out": "09:00", "breaks": [], "notes": "first"},
     )
     assert saved.status_code == 200
+    marked_day_off = await unauthenticated_client.put(
+        "/api/v1/days-off",
+        json={"start": work_date, "end": work_date},
+    )
+    assert marked_day_off.json() == {"days_off": [work_date]}
 
     assert (await unauthenticated_client.post("/logout")).status_code == 303
     assert (await unauthenticated_client.get("/api/v1/preferences")).status_code == 401
@@ -105,6 +110,11 @@ async def test_passkey_registration_login_and_user_data_isolation(
     assert registered.status_code == 200, registered.text
     second_entry = await unauthenticated_client.get(f"/api/v1/entries/{work_date}")
     assert second_entry.json()["saved"] is False
+    assert second_entry.json()["is_day_off"] is False
+    second_days_off = await unauthenticated_client.get(
+        f"/api/v1/days-off?start={work_date}&end={work_date}"
+    )
+    assert second_days_off.json() == {"days_off": []}
 
     await unauthenticated_client.post("/api/v1/auth/logout")
     await unauthenticated_client.post("/api/v1/auth/login/options", json={})
@@ -118,6 +128,7 @@ async def test_passkey_registration_login_and_user_data_isolation(
     )["sub"]
     first_entry = await unauthenticated_client.get(f"/api/v1/entries/{work_date}")
     assert first_entry.json()["notes"] == "first"
+    assert first_entry.json()["is_day_off"] is True
 
 
 @pytest.mark.asyncio
