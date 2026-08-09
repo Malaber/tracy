@@ -1,4 +1,4 @@
-from datetime import date
+from datetime import date, datetime
 
 import pytest
 
@@ -198,7 +198,7 @@ async def test_in_progress_actions_and_validation(client):
     checked_in = await client.post(f"/api/v1/entries/{work_date}/check-in")
     assert checked_in.status_code == 200
     assert checked_in.json()["status"] == "in_progress"
-    assert (await client.post(f"/api/v1/entries/{work_date}/check-in")).status_code == 409
+    assert (await client.post(f"/api/v1/entries/{work_date}/check-in")).status_code == 200
 
     invalid = await client.put(
         "/api/v1/entries/2026-07-18",
@@ -211,6 +211,61 @@ async def test_in_progress_actions_and_validation(client):
     assert (
         await client.get("/api/v1/statistics?period=custom&start=2027-01-01&end=2026-01-01")
     ).status_code == 422
+
+
+@pytest.mark.asyncio
+async def test_check_in_now_overwrites_an_existing_time(client, monkeypatch):
+    work_date = "2026-08-09"
+    await client.put(
+        f"/api/v1/entries/{work_date}",
+        json={
+            "check_in": "05:54",
+            "check_out": "17:30",
+            "breaks": [{"mode": "duration", "duration_minutes": 30}],
+        },
+    )
+
+    class FixedDateTime(datetime):
+        @classmethod
+        def now(cls, timezone=None):
+            return cls(2026, 8, 9, 8, 55, tzinfo=timezone)
+
+    monkeypatch.setattr("app.api.v1.routes.datetime", FixedDateTime)
+    response = await client.post(f"/api/v1/entries/{work_date}/check-in")
+
+    assert response.status_code == 200
+    assert response.json()["check_in"] == "08:55"
+    assert response.json()["check_out"] == "17:30"
+    assert response.json()["break_minutes"] == 30
+
+
+@pytest.mark.asyncio
+async def test_new_long_day_gets_default_break(client, monkeypatch):
+    manual_date = "2026-08-10"
+    manual = await client.put(
+        f"/api/v1/entries/{manual_date}",
+        json={"check_in": "08:00", "check_out": "12:31", "breaks": []},
+    )
+    assert manual.status_code == 200
+    assert manual.json()["break_minutes"] == 30
+    assert manual.json()["breaks"][0]["mode"] == "duration"
+    assert manual.json()["breaks"][0]["duration_minutes"] == 30
+
+    action_date = "2026-08-11"
+    await client.put(
+        f"/api/v1/entries/{action_date}",
+        json={"check_in": "08:00", "check_out": None, "breaks": []},
+    )
+
+    class FixedDateTime(datetime):
+        @classmethod
+        def now(cls, timezone=None):
+            return cls(2026, 8, 11, 13, 0, tzinfo=timezone)
+
+    monkeypatch.setattr("app.api.v1.routes.datetime", FixedDateTime)
+    action = await client.post(f"/api/v1/entries/{action_date}/check-out")
+    assert action.status_code == 200
+    assert action.json()["break_minutes"] == 30
 
 
 @pytest.mark.asyncio

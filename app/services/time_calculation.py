@@ -7,6 +7,8 @@ from typing import Any
 
 TIME_PATTERN = re.compile(r"^(\d{1,2}):(\d{2})$")
 DECIMAL_PATTERN = re.compile(r"^\d{1,2}(?:[.,]\d+)?$")
+DEFAULT_BREAK_THRESHOLD_MINUTES = 4 * 60 + 30
+DEFAULT_BREAK_MINUTES = 30
 
 
 def parse_clock_time(value: str | None) -> int | None:
@@ -54,6 +56,21 @@ def duration_for_range(start: int, end: int, *, crosses_midnight: bool = False) 
     if effective_end <= start:
         raise ValueError("End time must be later than start time.")
     return effective_end - start
+
+
+def needs_default_break(
+    check_in: int | None,
+    check_out: int | None,
+    check_out_next_day: bool,
+    breaks: list[Any],
+) -> bool:
+    """Return whether a newly completed day needs Tracy's default break."""
+    if check_in is None or check_out is None or breaks:
+        return False
+    return (
+        duration_for_range(check_in, check_out, crosses_midnight=check_out_next_day)
+        > DEFAULT_BREAK_THRESHOLD_MINUTES
+    )
 
 
 def calculate_break_minutes(breaks: list[dict[str, Any]]) -> int:

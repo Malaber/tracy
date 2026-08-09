@@ -19,9 +19,11 @@ from app.schemas.time_tracking import DayOffRangePayload, PreferencesPayload, Wo
 from app.services.german_holidays import FEDERAL_STATES
 from app.services.statistics import build_statistics, period_bounds
 from app.services.time_calculation import (
+    DEFAULT_BREAK_MINUTES,
     calculate_work_minutes,
     format_clock_time,
     minutes_as_hours,
+    needs_default_break,
     parse_clock_time,
     round_up,
 )
@@ -148,6 +150,23 @@ async def _entry_for_date(db: AsyncSession, user_id: UUID, work_date: date) -> W
         )
     )
     return result.scalar_one_or_none()
+
+
+def _add_default_break(entry: WorkEntry, *, was_complete: bool) -> None:
+    if was_complete or not needs_default_break(
+        entry.check_in_minutes,
+        entry.check_out_minutes,
+        entry.check_out_next_day,
+        entry.breaks,
+    ):
+        return
+    entry.breaks.append(
+        BreakEntry(
+            position=0,
+            mode="duration",
+            duration_minutes=DEFAULT_BREAK_MINUTES,
+        )
+    )
 
 
 @router.get("/meta")
@@ -299,6 +318,9 @@ async def upsert_entry(
     user: User = Depends(get_current_user),
 ) -> dict:
     entry = await _entry_for_date(db, user.id, work_date)
+    was_complete = bool(
+        entry and entry.check_in_minutes is not None and entry.check_out_minutes is not None
+    )
     if entry is None:
         entry = WorkEntry(user_id=user.id, work_date=work_date)
         db.add(entry)
@@ -310,6 +332,7 @@ async def upsert_entry(
     for position, break_payload in enumerate(payload.breaks):
         normalized = break_payload.normalized()
         entry.breaks.append(BreakEntry(position=position, **normalized))
+    _add_default_break(entry, was_complete=was_complete)
     await db.commit()
     await db.refresh(entry)
     preferences = await _preferences(db, user.id)
@@ -342,8 +365,6 @@ async def check_in(
     user: User = Depends(get_current_user),
 ) -> dict:
     entry = await _entry_for_date(db, user.id, work_date)
-    if entry is not None and entry.check_in_minutes is not None:
-        raise HTTPException(status_code=409, detail="This day already has a check-in time.")
     now = datetime.now(ZoneInfo(settings.timezone))
     if entry is None:
         entry = WorkEntry(user_id=user.id, work_date=work_date)
@@ -370,6 +391,7 @@ async def check_out(
     entry = await _entry_for_date(db, user.id, work_date)
     if entry is None or entry.check_in_minutes is None:
         raise HTTPException(status_code=409, detail="Check in before checking out.")
+    was_complete = entry.check_out_minutes is not None
     now = datetime.now(ZoneInfo(settings.timezone))
     checkout_minutes = now.hour * 60 + now.minute
     next_day = now.date() > work_date
@@ -377,6 +399,7 @@ async def check_out(
         raise HTTPException(status_code=409, detail="Check-out must be later than check-in.")
     entry.check_out_minutes = checkout_minutes
     entry.check_out_next_day = next_day
+    _add_default_break(entry, was_complete=was_complete)
     await db.commit()
     await db.refresh(entry)
     preferences = await _preferences(db, user.id)

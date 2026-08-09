@@ -6,6 +6,7 @@ from app.services.time_calculation import (
     duration_for_range,
     format_clock_time,
     minutes_as_hours,
+    needs_default_break,
     parse_clock_time,
     round_up,
 )
@@ -44,6 +45,14 @@ def test_calculate_complete_workday_with_both_break_types():
     ]
     assert calculate_break_minutes(breaks) == 45
     assert calculate_work_minutes(480, 1020, False, breaks) == (495, 45)
+
+
+def test_default_break_applies_only_to_long_days_without_breaks():
+    assert not needs_default_break(480, 750, False, [])
+    assert needs_default_break(480, 751, False, [])
+    assert needs_default_break(1320, 180, True, [])
+    assert not needs_default_break(480, 1020, False, [{"mode": "duration"}])
+    assert not needs_default_break(None, 1020, False, [])
 
 
 def test_calculate_overnight_break_and_incomplete_entries():
