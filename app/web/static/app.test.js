@@ -1,7 +1,15 @@
 import assert from "node:assert/strict";
+import fs from "node:fs/promises";
 import test from "node:test";
 
-import { calculateDraft, formatDuration, localISODate, parseClock, roundUp } from "./app.js";
+import {
+  calculateDraft,
+  formatDuration,
+  localISODate,
+  needsDefaultBreak,
+  parseClock,
+  roundUp,
+} from "./app.js";
 
 
 test("parseClock supports the calculator formats", () => {
@@ -44,4 +52,32 @@ test("calculateDraft handles breaks, rounding, overnight ranges, and incomplete 
   assert.throws(() => calculateDraft({ checkIn: "8", checkOut: "9", nextDay: false, breaks: [{ mode: "range", start: "", end: "8:30" }], rounding: 15 }), /need a start/);
   assert.throws(() => calculateDraft({ checkIn: "8", checkOut: "9", nextDay: false, breaks: [{ mode: "range", start: "8:30", end: "8:30" }], rounding: 15 }), /later/);
   assert.throws(() => calculateDraft({ checkIn: "8", checkOut: "9", nextDay: false, breaks: [{ mode: "duration", duration_minutes: 60 }], rounding: 15 }), /shorter/);
+});
+
+test("new long days get a default break", () => {
+  assert.equal(needsDefaultBreak({
+    checkIn: "8", checkOut: "12:30", nextDay: false, breaks: [], saved: false,
+  }), false);
+  assert.equal(needsDefaultBreak({
+    checkIn: "8", checkOut: "12:31", nextDay: false, breaks: [], saved: false,
+  }), true);
+  assert.equal(needsDefaultBreak({
+    checkIn: "22", checkOut: "03:00", nextDay: true, breaks: [], saved: false,
+  }), true);
+  assert.equal(needsDefaultBreak({
+    checkIn: "8", checkOut: "17", nextDay: false,
+    breaks: [{ mode: "duration", duration_minutes: 15 }], saved: false,
+  }), false);
+  assert.equal(needsDefaultBreak({
+    checkIn: "8", checkOut: "17", nextDay: false, breaks: [], saved: true,
+  }), false);
+});
+
+test("time fields request a normal mobile keyboard", async () => {
+  const template = await fs.readFile(new URL("../templates/index.html", import.meta.url), "utf8");
+  const script = await fs.readFile(new URL("./app.js", import.meta.url), "utf8");
+  assert.doesNotMatch(template, /inputmode="decimal"/);
+  assert.doesNotMatch(script, /inputmode="decimal"/);
+  assert.match(template, /id="checkIn"[^>]+inputmode="text"/);
+  assert.match(template, /id="checkOut"[^>]+inputmode="text"/);
 });

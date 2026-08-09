@@ -67,6 +67,19 @@ export function calculateDraft({ checkIn, checkOut, nextDay, breaks, rounding })
   return { exact, billable: roundUp(exact, rounding), breakMinutes };
 }
 
+export function needsDefaultBreak({ checkIn, checkOut, nextDay, breaks, saved }) {
+  if (saved || breaks.length || !String(checkIn ?? "").trim() || !String(checkOut ?? "").trim()) {
+    return false;
+  }
+  try {
+    const start = parseClock(checkIn);
+    const end = parseClock(checkOut);
+    return end + (nextDay ? 1440 : 0) - start > 4 * 60 + 30;
+  } catch {
+    return false;
+  }
+}
+
 export function localISODate(value = new Date()) {
   const year = value.getFullYear();
   const month = String(value.getMonth() + 1).padStart(2, "0");
@@ -182,7 +195,7 @@ function addBreakRow(item = { mode: "duration", duration_minutes: 30, start: "",
       values.innerHTML = `<input class="break-duration" type="number" min="1" max="1440" step="1" aria-label="Break duration in minutes" placeholder="Minutes" value="${escapeHtml(item.duration_minutes ?? 30)}">`;
     } else {
       values.className = "break-values range-inputs";
-      values.innerHTML = `<input class="break-start" type="text" inputmode="decimal" aria-label="Break start" placeholder="12:00" value="${escapeHtml(item.start ?? "")}"><input class="break-end" type="text" inputmode="decimal" aria-label="Break end" placeholder="12:30" value="${escapeHtml(item.end ?? "")}">`;
+      values.innerHTML = `<input class="break-start" type="text" inputmode="text" aria-label="Break start" placeholder="12:00" value="${escapeHtml(item.start ?? "")}"><input class="break-end" type="text" inputmode="text" aria-label="Break end" placeholder="12:30" value="${escapeHtml(item.end ?? "")}">`;
     }
     values.querySelectorAll("input").forEach((input) => input.addEventListener("input", updateLiveSummary));
   };
@@ -233,7 +246,17 @@ function collectDraft() {
 
 function updateLiveSummary() {
   try {
-    const draft = collectDraft();
+    let draft = collectDraft();
+    if (needsDefaultBreak({
+      checkIn: draft.check_in,
+      checkOut: draft.check_out,
+      nextDay: draft.check_out_next_day,
+      breaks: draft.breaks,
+      saved: state.entry?.saved,
+    })) {
+      addBreakRow();
+      draft = collectDraft();
+    }
     const calculated = calculateDraft({
       checkIn: draft.check_in,
       checkOut: draft.check_out,
