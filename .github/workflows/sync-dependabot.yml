@@ -1,0 +1,13 @@
+name: Sync Dependabot configuration
+
+on:
+  schedule:
+    - cron: "23 5 * * 1"
+  workflow_dispatch:
+
+jobs:
+  sync:
+    permissions:
+      contents: write
+      pull-requests: write
+    uses: Malaber/github-workflows/.github/workflows/reusable-dependabot-sync.yml@main

@@ -1,3 +1,4 @@
+# Managed by Malaber/github-workflows; do not edit in application repositories.
 version: 2
 updates:
   - package-ecosystem: pip
