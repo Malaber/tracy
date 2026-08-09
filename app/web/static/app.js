@@ -195,7 +195,7 @@ function addBreakRow(item = { mode: "duration", duration_minutes: 30, start: "",
       values.innerHTML = `<input class="break-duration" type="number" min="1" max="1440" step="1" aria-label="Break duration in minutes" placeholder="Minutes" value="${escapeHtml(item.duration_minutes ?? 30)}">`;
     } else {
       values.className = "break-values range-inputs";
-      values.innerHTML = `<input class="break-start" type="text" inputmode="text" aria-label="Break start" placeholder="12:00" value="${escapeHtml(item.start ?? "")}"><input class="break-end" type="text" inputmode="text" aria-label="Break end" placeholder="12:30" value="${escapeHtml(item.end ?? "")}">`;
+      values.innerHTML = `<input class="break-start" type="time" step="60" aria-label="Break start" value="${escapeHtml(item.start ?? "")}"><input class="break-end" type="time" step="60" aria-label="Break end" value="${escapeHtml(item.end ?? "")}">`;
     }
     values.querySelectorAll("input").forEach((input) => input.addEventListener("input", updateLiveSummary));
   };

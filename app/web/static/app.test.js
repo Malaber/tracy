@@ -73,11 +73,11 @@ test("new long days get a default break", () => {
   }), false);
 });
 
-test("time fields request a normal mobile keyboard", async () => {
+test("clock fields use native time controls", async () => {
   const template = await fs.readFile(new URL("../templates/index.html", import.meta.url), "utf8");
   const script = await fs.readFile(new URL("./app.js", import.meta.url), "utf8");
-  assert.doesNotMatch(template, /inputmode="decimal"/);
-  assert.doesNotMatch(script, /inputmode="decimal"/);
-  assert.match(template, /id="checkIn"[^>]+inputmode="text"/);
-  assert.match(template, /id="checkOut"[^>]+inputmode="text"/);
+  assert.match(template, /id="checkIn" type="time" step="60"/);
+  assert.match(template, /id="checkOut" type="time" step="60"/);
+  assert.match(script, /class="break-start" type="time" step="60"/);
+  assert.match(script, /class="break-end" type="time" step="60"/);
 });
