@@ -119,7 +119,7 @@ The web E2E registers a real virtual passkey, exchanges a native PKCE token, ver
 retries and stale-write conflicts against the running backend, and deletes the account.
 
 Native CI uses `.codex/setup.sh --ios` to install only pinned Invoke, avoiding unrelated backend
-and Node downloads. Xcode 26.6 and iOS 26.5 are explicit; each job creates its own simulator.
+and Node downloads. Xcode 26.2 and iOS 26.2 are explicit; each job creates its own simulator.
 Tests use English/US locale, explicit text sizes, a fixed fixture clock, isolated journals,
 and fresh light/dark app launches. Demo mode does not start network monitoring or periodic refresh.
 Accessibility audits run once, without retries or ignored findings. PR and main device matrices

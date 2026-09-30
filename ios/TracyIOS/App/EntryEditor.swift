@@ -116,6 +116,7 @@ struct EntryEditor: View {
                 }
                 if let error { Section { Text(error).foregroundStyle(.red) } }
             }
+            .accessibilityIdentifier("entryForm")
             .navigationTitle("Edit entry")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
