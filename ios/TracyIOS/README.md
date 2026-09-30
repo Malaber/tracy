@@ -124,3 +124,8 @@ Tests use English/US locale, explicit text sizes, a fixed fixture clock, isolate
 and fresh light/dark app launches. Demo mode does not start network monitoring or periodic refresh.
 Accessibility audits run once, without retries or ignored findings. PR and main device matrices
 remain enabled. Hosted runner and Apple service availability are outside test control.
+
+Each accessibility category (contrast, hit regions, descriptions, clipping, and traits) has
+its own light and dark test and fresh app launch. This avoids submitting five categories
+under one audit-service deadline and makes any service failure attributable to one check.
+Screenshots use screen capture before auditing, with no app-hierarchy query in audit logging.

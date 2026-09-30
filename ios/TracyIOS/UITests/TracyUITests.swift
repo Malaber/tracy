@@ -9,17 +9,57 @@ final class TracyUITests: XCTestCase {
     }
 
     @MainActor
-    func testTodayAccessibilityLight() throws {
-        try auditToday(appearance: "light")
+    func testTodayLightContrast() throws {
+        try auditToday(appearance: "light", category: .contrast, name: "Contrast")
     }
 
     @MainActor
-    func testTodayAccessibilityDark() throws {
-        try auditToday(appearance: "dark")
+    func testTodayLightHitRegions() throws {
+        try auditToday(appearance: "light", category: .hitRegion, name: "HitRegions")
     }
 
     @MainActor
-    private func auditToday(appearance: String) throws {
+    func testTodayLightDescriptions() throws {
+        try auditToday(appearance: "light", category: .sufficientElementDescription, name: "Descriptions")
+    }
+
+    @MainActor
+    func testTodayLightClipping() throws {
+        try auditToday(appearance: "light", category: .textClipped, name: "Clipping")
+    }
+
+    @MainActor
+    func testTodayLightTraits() throws {
+        try auditToday(appearance: "light", category: .trait, name: "Traits")
+    }
+
+    @MainActor
+    func testTodayDarkContrast() throws {
+        try auditToday(appearance: "dark", category: .contrast, name: "Contrast")
+    }
+
+    @MainActor
+    func testTodayDarkHitRegions() throws {
+        try auditToday(appearance: "dark", category: .hitRegion, name: "HitRegions")
+    }
+
+    @MainActor
+    func testTodayDarkDescriptions() throws {
+        try auditToday(appearance: "dark", category: .sufficientElementDescription, name: "Descriptions")
+    }
+
+    @MainActor
+    func testTodayDarkClipping() throws {
+        try auditToday(appearance: "dark", category: .textClipped, name: "Clipping")
+    }
+
+    @MainActor
+    func testTodayDarkTraits() throws {
+        try auditToday(appearance: "dark", category: .trait, name: "Traits")
+    }
+
+    @MainActor
+    private func auditToday(appearance: String, category: XCUIAccessibilityAuditType, name: String) throws {
         let app = XCUIApplication()
         // Launch directly in the audited appearance, without a live scheme transition.
         app.launchArguments = testArguments + ["-appearance", appearance]
@@ -30,12 +70,12 @@ final class TracyUITests: XCTestCase {
         // hosted iPad service can stop answering those queries. Screen capture does not
         // query the app hierarchy; collect evidence before handing control to the audit.
         let screenshot = XCTAttachment(screenshot: XCUIScreen.main.screenshot())
-        screenshot.name = "Today-\(appearance)"
+        screenshot.name = "Today-\(appearance)-\(name)"
         screenshot.lifetime = .keepAlways
         add(screenshot)
-        try app.performAccessibilityAudit(for: [
-            .contrast, .hitRegion, .sufficientElementDescription, .textClipped, .trait,
-        ]) { issue in
+        // One category per fresh launch reduces work under the service's fixed
+        // timeout and identifies the failing category without retries.
+        try app.performAccessibilityAudit(for: category) { issue in
             // Do not resolve issue.element: that performs another accessibility query
             // while the audit service is handling a finding.
             print("Accessibility audit: \(issue.detailedDescription)")
