@@ -1,0 +1,8 @@
+{
+  "fill-specializations": [
+    {"value": {"linear-gradient": ["srgb:0.05,0.45,0.48,1.0", "srgb:0.03,0.25,0.30,1.0"]}},
+    {"appearance": "dark", "value": {"linear-gradient": ["srgb:0.04,0.23,0.27,1.0", "srgb:0.02,0.10,0.15,1.0"]}}
+  ],
+  "groups": [{"layers": [{"image-name": "Tracy.svg", "name": "Tracy"}], "shadow": {"kind": "neutral", "opacity": 0.35}}],
+  "supported-platforms": {"squares": "shared"}
+}

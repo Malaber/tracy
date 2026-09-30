@@ -1,0 +1,70 @@
+name: TracyApp
+options:
+  minimumXcodeGenVersion: 2.38.0
+packages:
+  TracyCore:
+    path: .
+settings:
+  base:
+    SWIFT_VERSION: 6.0
+    DEVELOPMENT_TEAM: VWKG94374J
+targets:
+  Tracy:
+    type: application
+    platform: iOS
+    deploymentTarget: '17.0'
+    sources:
+      - App
+      - Assets.xcassets
+      - path: AppIcon.icon
+        buildPhase: resources
+    dependencies:
+      - package: TracyCore
+    configFiles:
+      Debug: Version.xcconfig
+      Release: Version.xcconfig
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: de.malaber.tracy
+        PRODUCT_NAME: Tracy
+        MARKETING_VERSION: "$(inherited)"
+        CURRENT_PROJECT_VERSION: 2
+        TARGETED_DEVICE_FAMILY: '1,2'
+        SUPPORTS_MACCATALYST: NO
+        GENERATE_INFOPLIST_FILE: YES
+        INFOPLIST_KEY_CFBundleDisplayName: Tracy Time Tracking
+        INFOPLIST_KEY_ITSAppUsesNonExemptEncryption: NO
+        INFOPLIST_KEY_UIApplicationSceneManifest_Generation: YES
+        INFOPLIST_KEY_UILaunchScreen_Generation: YES
+        INFOPLIST_KEY_LSApplicationCategoryType: public.app-category.productivity
+        ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        INFOPLIST_KEY_CFBundleIconName: AppIcon
+    info:
+      path: App/Info.plist
+      properties:
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        CFBundleURLTypes:
+          - CFBundleURLName: de.malaber.tracy.auth
+            CFBundleURLSchemes: [de.malaber.tracy]
+        UISupportedInterfaceOrientations: [UIInterfaceOrientationPortrait, UIInterfaceOrientationLandscapeLeft, UIInterfaceOrientationLandscapeRight]
+        UISupportedInterfaceOrientations~ipad: [UIInterfaceOrientationPortrait, UIInterfaceOrientationPortraitUpsideDown, UIInterfaceOrientationLandscapeLeft, UIInterfaceOrientationLandscapeRight]
+  TracyUITests:
+    type: bundle.ui-testing
+    platform: iOS
+    deploymentTarget: '17.0'
+    sources: [UITests]
+    dependencies:
+      - target: Tracy
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: de.malaber.tracy.uitests
+        GENERATE_INFOPLIST_FILE: YES
+schemes:
+  Tracy:
+    build:
+      targets:
+        Tracy: all
+    test:
+      targets: [TracyUITests]

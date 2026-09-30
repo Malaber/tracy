@@ -32,6 +32,14 @@ class WorkEntry(Base):
     check_out_minutes: Mapped[int | None] = mapped_column(Integer)
     check_out_next_day: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     notes: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    revision: Mapped[str] = mapped_column(
+        String(36), nullable=False, default=lambda: str(uuid.uuid4())
+    )
+    client_mutation_id: Mapped[str | None] = mapped_column(String(36))
+    __mapper_args__ = {
+        "version_id_col": revision,
+        "version_id_generator": lambda _: str(uuid.uuid4()),
+    }
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()

@@ -1,0 +1,46 @@
+name: iOS
+
+on:
+  push:
+    paths: ['ios/**', 'tasks.py', '.github/workflows/ios.yml']
+  pull_request:
+    paths: ['ios/**', 'tasks.py', '.github/workflows/ios.yml']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ios-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  native:
+    runs-on: macos-26
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        device: ['iPhone 17 Pro', 'iPad Pro 13-inch (M5)']
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.14'
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '24'
+      - run: .codex/setup.sh
+      - run: brew install xcodegen
+      - run: .venv/bin/inv check-ios-package
+      - run: .venv/bin/inv build-ios-simulator
+      - name: Native UI smoke tests
+        run: .venv/bin/inv check-ios-ui --destination="platform=iOS Simulator,name=${{ matrix.device }}"
+      - if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: ios-test-results-${{ matrix.device }}
+          path: ios/TracyIOS/DerivedData/Logs/Test/*.xcresult
+          retention-days: 7

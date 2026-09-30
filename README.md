@@ -59,3 +59,10 @@ The working-day calculation includes national holidays and whole-state public ho
 selected German federal state. Municipal holidays such as Augsburg Peace Festival, Bavaria's
 municipality-dependent Assumption Day, and local Corpus Christi rules in Saxony/Thuringia are not
 treated as state-wide days off.
+
+## Native iOS app
+
+[Tracy Time Tracking](ios/TracyIOS/README.md) is the native SwiftUI iPhone/iPad client. It focuses
+on quick time entry, reviewing recent days, and durable offline entry with automatic retry and
+explicit conflict resolution. It supports system/light/dark appearance and native Liquid Glass
+on iOS 26+. Bundle ID and App Store Connect SKU: `de.malaber.tracy`.

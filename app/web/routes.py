@@ -117,3 +117,13 @@ async def logout(request: Request, db: AsyncSession = Depends(get_db)) -> Redire
     await revoke_auth_session(request, db)
     request.session.clear()
     return RedirectResponse("/login", status_code=303)
+
+
+@router.get("/support", response_class=HTMLResponse)
+@router.get("/privacy", response_class=HTMLResponse)
+@router.get("/app", response_class=HTMLResponse)
+async def app_information(request: Request) -> Response:
+    page = request.url.path.strip("/")
+    return templates.TemplateResponse(
+        request=request, name=f"public_{page}.html", context=_context(request)
+    )
