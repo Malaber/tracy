@@ -81,7 +81,7 @@ struct TodayView: View {
                         Text(Clock.title(store.today))
                             .font(.subheadline).foregroundStyle(.primary)
                         Text(headline).font(.largeTitle.bold()).accessibilityAddTraits(.isHeader)
-                        Text(subtitle).foregroundStyle(Color(uiColor: .label)).padding(.bottom, 12)
+                            .accessibilityHint(subtitle)
                         if entry.checkIn == nil || entry.checkOut == nil {
                             Button {
                                 store.quickAction(checkOut: entry.checkIn != nil)

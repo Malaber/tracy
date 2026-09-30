@@ -328,8 +328,8 @@ def check_ios_ui(c, destination="platform=iOS Simulator,name=iPhone 17 Pro"):
 
 @task(generate_ios_project)
 def upload_ios_testflight(c, build_number="1"):
-    version = _current_ios_version()
     """Archive, sign, and upload a validated iOS build to App Store Connect."""
+    version = _current_ios_version()
     if not re.fullmatch(r"\d+\.\d+\.\d+", version):
         raise ValueError("version must be major.minor.patch")
     if not re.fullmatch(r"[1-9]\d*", str(build_number)):
