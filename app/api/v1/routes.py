@@ -3,13 +3,14 @@ from __future__ import annotations
 import csv
 import io
 from datetime import date, datetime, timedelta
-from uuid import UUID
+from uuid import UUID, uuid4
 from zoneinfo import ZoneInfo
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
+from fastapi import APIRouter, Depends, Header, HTTPException, Query, Response, status
 from sqlalchemy import delete, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm.exc import StaleDataError
 
 from app.api.deps import get_current_user
 from app.core.config import settings
@@ -90,6 +91,8 @@ def _entry_to_payload(
     if entry is None:
         return {
             "saved": False,
+            "revision": "missing",
+            "client_mutation_id": None,
             "date": work_date.isoformat(),
             "is_day_off": is_day_off,
             "check_in": None,
@@ -126,6 +129,8 @@ def _entry_to_payload(
         status_name = "empty"
     return {
         "saved": True,
+        "revision": entry.revision,
+        "client_mutation_id": entry.client_mutation_id,
         "date": entry.work_date.isoformat(),
         "is_day_off": is_day_off,
         "check_in": format_clock_time(entry.check_in_minutes),
@@ -316,8 +321,20 @@ async def upsert_entry(
     payload: WorkEntryPayload,
     db: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
+    if_match: str | None = Header(default=None),
+    idempotency_key: UUID | None = Header(default=None),
 ) -> dict:
     entry = await _entry_for_date(db, user.id, work_date)
+    preferences = await _preferences(db, user.id)
+    day_off_dates = await _day_off_dates(db, user.id, work_date, work_date)
+    if entry and idempotency_key and entry.client_mutation_id == str(idempotency_key):
+        return _entry_to_payload(
+            entry, work_date, preferences.rounding_minutes, is_day_off=work_date in day_off_dates
+        )
+    if if_match is not None and if_match != (entry.revision if entry else "missing"):
+        raise HTTPException(
+            409, "This day changed on another device. Review both entries before syncing."
+        )
     was_complete = bool(
         entry and entry.check_in_minutes is not None and entry.check_out_minutes is not None
     )
@@ -328,12 +345,20 @@ async def upsert_entry(
     entry.check_out_minutes = parse_clock_time(payload.check_out)
     entry.check_out_next_day = payload.check_out_next_day
     entry.notes = payload.notes.strip()
+    entry.revision = str(uuid4())
+    entry.client_mutation_id = str(idempotency_key) if idempotency_key else None
     entry.breaks.clear()
     for position, break_payload in enumerate(payload.breaks):
         normalized = break_payload.normalized()
         entry.breaks.append(BreakEntry(position=position, **normalized))
     _add_default_break(entry, was_complete=was_complete)
-    await db.commit()
+    try:
+        await db.commit()
+    except (IntegrityError, StaleDataError) as exc:
+        await db.rollback()
+        raise HTTPException(
+            409, "This day changed on another device. Refresh before saving."
+        ) from exc
     await db.refresh(entry)
     preferences = await _preferences(db, user.id)
     day_off_dates = await _day_off_dates(db, user.id, work_date, work_date)
@@ -370,6 +395,8 @@ async def check_in(
         entry = WorkEntry(user_id=user.id, work_date=work_date)
         db.add(entry)
     entry.check_in_minutes = now.hour * 60 + now.minute
+    entry.client_mutation_id = None
+    entry.revision = str(uuid4())
     await db.commit()
     await db.refresh(entry)
     preferences = await _preferences(db, user.id)
@@ -399,6 +426,8 @@ async def check_out(
         raise HTTPException(status_code=409, detail="Check-out must be later than check-in.")
     entry.check_out_minutes = checkout_minutes
     entry.check_out_next_day = next_day
+    entry.client_mutation_id = None
+    entry.revision = str(uuid4())
     _add_default_break(entry, was_complete=was_complete)
     await db.commit()
     await db.refresh(entry)

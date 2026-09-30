@@ -1,0 +1,502 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 77;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		259AD5AD43EAFB21CE9E7247 /* TracyApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 10D5BE15721AC2D1F2D61B97 /* TracyApp.swift */; };
+		4D7EF413837943296DDB362E /* AppIcon.icon in Resources */ = {isa = PBXBuildFile; fileRef = 763F0A35622A95792A596D6C /* AppIcon.icon */; };
+		57BAE984DF1870ADFF8336EA /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 6D5E4CBED1AD90C16D148AE0 /* Assets.xcassets */; };
+		598AF216C11195D5A5072224 /* EntryEditor.swift in Sources */ = {isa = PBXBuildFile; fileRef = C983F527A8764079A8A2EAFF /* EntryEditor.swift */; };
+		65589C874754D43DF0A592E6 /* TracyUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8CE178044A01404A4969F5BE /* TracyUITests.swift */; };
+		7F41B341D99E38A04D047E7D /* Authentication.swift in Sources */ = {isa = PBXBuildFile; fileRef = 15B1267AAD0731C3290E34C0 /* Authentication.swift */; };
+		9EF6949C12F5DFC3173C98CE /* AppStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = FC46A697DE72816095362688 /* AppStore.swift */; };
+		C70D4EC4276438E85636DE24 /* RootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C33D5B25355F68F0BC190404 /* RootView.swift */; };
+		EF914E5CDABADD43F6D9D135 /* SecondaryViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = 93589588D442ED5BA4AD47F8 /* SecondaryViews.swift */; };
+		F72E57B0F03B6809F8CFE404 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = 8C8A6075C9BAFC929A7CBE99 /* PrivacyInfo.xcprivacy */; };
+		FDADDD6443037E65B8EBFC73 /* TracyCore in Frameworks */ = {isa = PBXBuildFile; productRef = 8447051C5C5751E171D0D42E /* TracyCore */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXContainerItemProxy section */
+		E200F0F181D464075A6BB70C /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 88B9117A093265D25039BB14 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = B1767D988016EAF6D37BC0D1;
+			remoteInfo = Tracy;
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXFileReference section */
+		02B0D9A5212BEB67E006CBB1 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
+		10D5BE15721AC2D1F2D61B97 /* TracyApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TracyApp.swift; sourceTree = "<group>"; };
+		1173BF00F583B4CD2C1E0F26 /* TracyUITests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = TracyUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		1548A00CD3A3757D68A4365D /* Tracy.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = Tracy.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		15B1267AAD0731C3290E34C0 /* Authentication.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Authentication.swift; sourceTree = "<group>"; };
+		6D5E4CBED1AD90C16D148AE0 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		763F0A35622A95792A596D6C /* AppIcon.icon */ = {isa = PBXFileReference; lastKnownFileType = wrapper.icon; path = AppIcon.icon; sourceTree = "<group>"; };
+		8C8A6075C9BAFC929A7CBE99 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
+		8CE178044A01404A4969F5BE /* TracyUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TracyUITests.swift; sourceTree = "<group>"; };
+		93589588D442ED5BA4AD47F8 /* SecondaryViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SecondaryViews.swift; sourceTree = "<group>"; };
+		C33D5B25355F68F0BC190404 /* RootView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RootView.swift; sourceTree = "<group>"; };
+		C91E53FABCF034848B321B58 /* TracyIOS */ = {isa = PBXFileReference; lastKnownFileType = folder; name = TracyIOS; path = .; sourceTree = SOURCE_ROOT; };
+		C983F527A8764079A8A2EAFF /* EntryEditor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EntryEditor.swift; sourceTree = "<group>"; };
+		FC46A697DE72816095362688 /* AppStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppStore.swift; sourceTree = "<group>"; };
+/* End PBXFileReference section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		251F67C9B5ECF57E123ABFF1 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				FDADDD6443037E65B8EBFC73 /* TracyCore in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		45195F303DEEFDE2B5A3A32C /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				1548A00CD3A3757D68A4365D /* Tracy.app */,
+				1173BF00F583B4CD2C1E0F26 /* TracyUITests.xctest */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+		ACE6695AA0A9D1028F36DB74 /* UITests */ = {
+			isa = PBXGroup;
+			children = (
+				8CE178044A01404A4969F5BE /* TracyUITests.swift */,
+			);
+			path = UITests;
+			sourceTree = "<group>";
+		};
+		DF0F537115E3E75365195B0A = {
+			isa = PBXGroup;
+			children = (
+				763F0A35622A95792A596D6C /* AppIcon.icon */,
+				6D5E4CBED1AD90C16D148AE0 /* Assets.xcassets */,
+				E1F4712FF85C30D5E08B0C65 /* App */,
+				FC9F8184C6CD80F89C381C0D /* Packages */,
+				ACE6695AA0A9D1028F36DB74 /* UITests */,
+				45195F303DEEFDE2B5A3A32C /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		E1F4712FF85C30D5E08B0C65 /* App */ = {
+			isa = PBXGroup;
+			children = (
+				FC46A697DE72816095362688 /* AppStore.swift */,
+				15B1267AAD0731C3290E34C0 /* Authentication.swift */,
+				C983F527A8764079A8A2EAFF /* EntryEditor.swift */,
+				02B0D9A5212BEB67E006CBB1 /* Info.plist */,
+				8C8A6075C9BAFC929A7CBE99 /* PrivacyInfo.xcprivacy */,
+				C33D5B25355F68F0BC190404 /* RootView.swift */,
+				93589588D442ED5BA4AD47F8 /* SecondaryViews.swift */,
+				10D5BE15721AC2D1F2D61B97 /* TracyApp.swift */,
+			);
+			path = App;
+			sourceTree = "<group>";
+		};
+		FC9F8184C6CD80F89C381C0D /* Packages */ = {
+			isa = PBXGroup;
+			children = (
+				C91E53FABCF034848B321B58 /* TracyIOS */,
+			);
+			name = Packages;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		B1767D988016EAF6D37BC0D1 /* Tracy */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 9A7EB9B5C10CF4BA4F05D107 /* Build configuration list for PBXNativeTarget "Tracy" */;
+			buildPhases = (
+				A59D7EEEE500955E42F444E5 /* Sources */,
+				77907790B1AEB97D157831C7 /* Resources */,
+				251F67C9B5ECF57E123ABFF1 /* Frameworks */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = Tracy;
+			packageProductDependencies = (
+				8447051C5C5751E171D0D42E /* TracyCore */,
+			);
+			productName = Tracy;
+			productReference = 1548A00CD3A3757D68A4365D /* Tracy.app */;
+			productType = "com.apple.product-type.application";
+		};
+		F58E05B7B74F25CF12CFE9F3 /* TracyUITests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 02E02D306F2DDFAE7CDE7F88 /* Build configuration list for PBXNativeTarget "TracyUITests" */;
+			buildPhases = (
+				31EB0182BDF3A1A0EF640C59 /* Sources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				E62FBB3939EE07F494EC68E0 /* PBXTargetDependency */,
+			);
+			name = TracyUITests;
+			packageProductDependencies = (
+			);
+			productName = TracyUITests;
+			productReference = 1173BF00F583B4CD2C1E0F26 /* TracyUITests.xctest */;
+			productType = "com.apple.product-type.bundle.ui-testing";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		88B9117A093265D25039BB14 /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = YES;
+				LastUpgradeCheck = 1430;
+				TargetAttributes = {
+					B1767D988016EAF6D37BC0D1 = {
+						DevelopmentTeam = VWKG94374J;
+					};
+					F58E05B7B74F25CF12CFE9F3 = {
+						DevelopmentTeam = VWKG94374J;
+						TestTargetID = B1767D988016EAF6D37BC0D1;
+					};
+				};
+			};
+			buildConfigurationList = 798D307C16EFABF4F6FD9885 /* Build configuration list for PBXProject "TracyApp" */;
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				Base,
+				en,
+			);
+			mainGroup = DF0F537115E3E75365195B0A;
+			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				BA87767352173D0E2056BFDC /* XCLocalSwiftPackageReference "." */,
+			);
+			preferredProjectObjectVersion = 77;
+			productRefGroup = 45195F303DEEFDE2B5A3A32C /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				B1767D988016EAF6D37BC0D1 /* Tracy */,
+				F58E05B7B74F25CF12CFE9F3 /* TracyUITests */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		77907790B1AEB97D157831C7 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				4D7EF413837943296DDB362E /* AppIcon.icon in Resources */,
+				57BAE984DF1870ADFF8336EA /* Assets.xcassets in Resources */,
+				F72E57B0F03B6809F8CFE404 /* PrivacyInfo.xcprivacy in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		31EB0182BDF3A1A0EF640C59 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				65589C874754D43DF0A592E6 /* TracyUITests.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		A59D7EEEE500955E42F444E5 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				9EF6949C12F5DFC3173C98CE /* AppStore.swift in Sources */,
+				7F41B341D99E38A04D047E7D /* Authentication.swift in Sources */,
+				598AF216C11195D5A5072224 /* EntryEditor.swift in Sources */,
+				C70D4EC4276438E85636DE24 /* RootView.swift in Sources */,
+				EF914E5CDABADD43F6D9D135 /* SecondaryViews.swift in Sources */,
+				259AD5AD43EAFB21CE9E7247 /* TracyApp.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		E62FBB3939EE07F494EC68E0 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = B1767D988016EAF6D37BC0D1 /* Tracy */;
+			targetProxy = E200F0F181D464075A6BB70C /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
+
+/* Begin XCBuildConfiguration section */
+		18181BF5495FD2E50A118B75 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = de.malaber.tracy.uitests;
+				SDKROOT = iphoneos;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_TARGET_NAME = Tracy;
+			};
+			name = Debug;
+		};
+		256DBF115E825F4B00656661 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_IDENTITY = "iPhone Developer";
+				CURRENT_PROJECT_VERSION = 1;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = App/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = "Tracy Time Tracking";
+				INFOPLIST_KEY_CFBundleIconName = AppIcon;
+				INFOPLIST_KEY_ITSAppUsesNonExemptEncryption = NO;
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.productivity";
+				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
+				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 0.1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = de.malaber.tracy;
+				PRODUCT_NAME = Tracy;
+				SDKROOT = iphoneos;
+				SUPPORTS_MACCATALYST = NO;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		30ECC3F2E538E45D57BD1508 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				DEVELOPMENT_TEAM = VWKG94374J;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"$(inherited)",
+					"DEBUG=1",
+				);
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				MTL_FAST_MATH = YES;
+				ONLY_ACTIVE_ARCH = YES;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+				SWIFT_VERSION = 6.0;
+			};
+			name = Debug;
+		};
+		4D51F73CC178702D68235E14 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				DEVELOPMENT_TEAM = VWKG94374J;
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				MTL_ENABLE_DEBUG_INFO = NO;
+				MTL_FAST_MATH = YES;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SWIFT_COMPILATION_MODE = wholemodule;
+				SWIFT_OPTIMIZATION_LEVEL = "-O";
+				SWIFT_VERSION = 6.0;
+			};
+			name = Release;
+		};
+		E997F102863C51A03D7C29BA /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_IDENTITY = "iPhone Developer";
+				CURRENT_PROJECT_VERSION = 1;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = App/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = "Tracy Time Tracking";
+				INFOPLIST_KEY_CFBundleIconName = AppIcon;
+				INFOPLIST_KEY_ITSAppUsesNonExemptEncryption = NO;
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.productivity";
+				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
+				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 0.1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = de.malaber.tracy;
+				PRODUCT_NAME = Tracy;
+				SDKROOT = iphoneos;
+				SUPPORTS_MACCATALYST = NO;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
+		EC6E5AF2CFAB320D2DAE7DFF /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = de.malaber.tracy.uitests;
+				SDKROOT = iphoneos;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_TARGET_NAME = Tracy;
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		02E02D306F2DDFAE7CDE7F88 /* Build configuration list for PBXNativeTarget "TracyUITests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				18181BF5495FD2E50A118B75 /* Debug */,
+				EC6E5AF2CFAB320D2DAE7DFF /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		798D307C16EFABF4F6FD9885 /* Build configuration list for PBXProject "TracyApp" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				30ECC3F2E538E45D57BD1508 /* Debug */,
+				4D51F73CC178702D68235E14 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		9A7EB9B5C10CF4BA4F05D107 /* Build configuration list for PBXNativeTarget "Tracy" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				256DBF115E825F4B00656661 /* Debug */,
+				E997F102863C51A03D7C29BA /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+/* End XCConfigurationList section */
+
+/* Begin XCLocalSwiftPackageReference section */
+		BA87767352173D0E2056BFDC /* XCLocalSwiftPackageReference "." */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = .;
+		};
+/* End XCLocalSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		8447051C5C5751E171D0D42E /* TracyCore */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = TracyCore;
+		};
+/* End XCSwiftPackageProductDependency section */
+	};
+	rootObject = 88B9117A093265D25039BB14 /* Project object */;
+}

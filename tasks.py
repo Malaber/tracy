@@ -272,3 +272,53 @@ def compute_version(_, ref_name="", run_number=""):
 def start(c, host="127.0.0.1", port=8000, reload=False):
     reload_flag = " --reload" if reload else ""
     c.run(f"{_bin('uvicorn')} app.main:app --host {host} --port {port}{reload_flag}")
+
+
+IOS_ROOT = ROOT / "ios" / "TracyIOS"
+
+
+@task
+def generate_ios_project(c):
+    """Generate the native Xcode project (requires XcodeGen)."""
+    c.run(f"xcodegen generate --spec {shlex.quote(str(IOS_ROOT / 'project.yml'))}")
+
+
+@task
+def check_ios_package(c):
+    """Test time entry, offline storage, and sync policies."""
+    c.run(f"swift test --package-path {shlex.quote(str(IOS_ROOT))}")
+
+
+@task(generate_ios_project)
+def build_ios_simulator(c):
+    """Build the universal iOS app without signing."""
+    c.run(
+        f"xcodebuild -project {shlex.quote(str(IOS_ROOT / 'TracyApp.xcodeproj'))} "
+        "-scheme Tracy -destination 'generic/platform=iOS Simulator' "
+        f"-derivedDataPath {shlex.quote(str(IOS_ROOT / 'DerivedData'))} "
+        "CODE_SIGNING_ALLOWED=NO build"
+    )
+
+
+@task(generate_ios_project)
+def check_ios_ui(c, destination="platform=iOS Simulator,name=iPhone 17 Pro"):
+    """Run native time-entry and accessibility smoke tests on an installed simulator."""
+    c.run(
+        f"xcodebuild -project {shlex.quote(str(IOS_ROOT / 'TracyApp.xcodeproj'))} "
+        f"-scheme Tracy -destination {shlex.quote(destination)} "
+        f"-derivedDataPath {shlex.quote(str(IOS_ROOT / 'DerivedData'))} "
+        "CODE_SIGNING_ALLOWED=NO test"
+    )
+
+
+@task
+def upload_ios_testflight(c, version="0.1.0", build_number="1"):
+    """Archive, sign, and upload a validated iOS build to App Store Connect."""
+    if not re.fullmatch(r"\d+\.\d+\.\d+", version):
+        raise ValueError("version must be major.minor.patch")
+    if not re.fullmatch(r"[1-9]\d*", str(build_number)):
+        raise ValueError("build_number must be a positive integer")
+    c.run(
+        f"{shlex.quote(str(IOS_ROOT / 'Scripts' / 'upload_testflight.sh'))} "
+        f"{shlex.quote(version)} {shlex.quote(str(build_number))}"
+    )

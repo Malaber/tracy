@@ -10,6 +10,9 @@ commands whenever an Invoke task exists.
 - `.venv/bin/inv check-js` runs JavaScript tests.
 - `.venv/bin/inv verify` runs all local checks.
 - `.venv/bin/inv start` starts the application for local use.
+- `.venv/bin/inv check-ios-package` tests native time-entry and offline-sync logic.
+- `.venv/bin/inv build-ios-simulator` generates and builds the native app (Xcode 26+, XcodeGen).
+- `.venv/bin/inv check-ios-ui` runs native UI and accessibility tests on an installed iPhone simulator.
 
 New calculation, API, or UI behavior should include focused automated coverage. Keep the local
 SQLite database out of version control and use a temporary database for tests.
