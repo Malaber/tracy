@@ -118,8 +118,9 @@ and exercises offline editing across process restarts plus light/dark accessibil
 The web E2E registers a real virtual passkey, exchanges a native PKCE token, verifies idempotent
 retries and stale-write conflicts against the running backend, and deletes the account.
 
-Accessibility CI audits light and dark appearance in separate app launches. It waits for the
-Today edit control before auditing and retries only XCTest accessibility-service timeout
-`com.apple.xcode.xctest.accessibilityAudit` code `-56` once, after relaunch. Actual accessibility
-findings and repeated timeouts still fail the run; diagnostic attachments remain in the result
-bundle. PRs and main pushes each run one iPhone/iPad matrix, without a duplicate branch-push run.
+Native CI uses `.codex/setup.sh --ios` to install only pinned Invoke, avoiding unrelated backend
+and Node downloads. Xcode 26.6 and iOS 26.5 are explicit; each job creates its own simulator.
+Tests use English/US locale, explicit text sizes, a fixed fixture clock, isolated journals,
+and fresh light/dark app launches. Demo mode does not start network monitoring or periodic refresh.
+Accessibility audits run once, without retries or ignored findings. PR and main device matrices
+remain enabled. Hosted runner and Apple service availability are outside test control.

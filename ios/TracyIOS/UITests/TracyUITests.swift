@@ -1,6 +1,13 @@
 import XCTest
 
 final class TracyUITests: XCTestCase {
+    private var testArguments: [String] {
+        [
+            "--ui-testing", "-AppleLanguages", "(en)", "-AppleLocale", "en_US",
+            "-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryL",
+        ]
+    }
+
     @MainActor
     func testTodayAccessibilityLight() throws {
         try auditToday(appearance: "light")
@@ -15,7 +22,7 @@ final class TracyUITests: XCTestCase {
     private func auditToday(appearance: String) throws {
         let app = XCUIApplication()
         // Launch directly in the audited appearance, without a live scheme transition.
-        app.launchArguments = ["--ui-testing", "-appearance", appearance]
+        app.launchArguments = testArguments + ["-appearance", appearance]
         app.launch()
         defer {
             let screenshot = XCTAttachment(screenshot: app.screenshot())
@@ -25,39 +32,20 @@ final class TracyUITests: XCTestCase {
             app.terminate()
         }
         XCTAssertTrue(app.buttons["editToday"].waitForExistence(timeout: 15))
-        for attempt in 0..<2 {
-            do {
-                try app.performAccessibilityAudit(for: [
-                    .contrast, .hitRegion, .sufficientElementDescription, .textClipped, .trait,
-                ]) { issue in
-                    print(
-                        "Accessibility audit: \(issue.detailedDescription); element: \(String(describing: issue.element))"
-                    )
-                    return false
-                }
-                return
-            } catch {
-                let failure = error as NSError
-                // Hosted iPad accessibility service sometimes times out. Never retry findings
-                // or unrelated failures, and propagate a repeated timeout to CI.
-                guard attempt == 0,
-                    failure.domain == "com.apple.xcode.xctest.accessibilityAudit",
-                    failure.code == -56
-                else { throw error }
-                let diagnostic = XCTAttachment(string: "Retrying audit infrastructure timeout: \(failure)")
-                diagnostic.lifetime = .keepAlways
-                add(diagnostic)
-                app.terminate()
-                app.launch()
-                XCTAssertTrue(app.buttons["editToday"].waitForExistence(timeout: 15))
-            }
+        try app.performAccessibilityAudit(for: [
+            .contrast, .hitRegion, .sufficientElementDescription, .textClipped, .trait,
+        ]) { issue in
+            print(
+                "Accessibility audit: \(issue.detailedDescription); element: \(String(describing: issue.element))"
+            )
+            return false
         }
     }
 
     @MainActor
     func testOfflineEntryAndReviewNavigation() throws {
         let app = XCUIApplication()
-        app.launchArguments = ["--ui-testing"]
+        app.launchArguments = testArguments
         app.launchEnvironment["TRACY_UI_JOURNAL"] = UUID().uuidString
         app.launch()
         XCTAssertTrue(app.buttons["editToday"].waitForExistence(timeout: 10))
@@ -82,7 +70,8 @@ final class TracyUITests: XCTestCase {
     func testAppearanceAndAccessibility() throws {
         let app = XCUIApplication()
         app.launchArguments = [
-            "--ui-testing", "-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryAccessibilityXXXL",
+            "--ui-testing", "-AppleLanguages", "(en)", "-AppleLocale", "en_US",
+            "-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryAccessibilityXXXL",
         ]
         app.launch()
         XCTAssertTrue(app.buttons["Settings"].firstMatch.waitForExistence(timeout: 10))

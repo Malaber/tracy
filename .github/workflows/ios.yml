@@ -3,9 +3,9 @@ name: iOS
 on:
   push:
     branches: [main]
-    paths: ['ios/**', 'tasks.py', '.github/workflows/ios.yml']
+    paths: ['ios/**', 'tasks.py', '.codex/setup.sh', '.github/workflows/ios.yml']
   pull_request:
-    paths: ['ios/**', 'tasks.py', '.github/workflows/ios.yml']
+    paths: ['ios/**', 'tasks.py', '.codex/setup.sh', '.github/workflows/ios.yml']
   workflow_dispatch:
 
 permissions:
@@ -19,6 +19,8 @@ jobs:
   native:
     runs-on: macos-26
     timeout-minutes: 30
+    env:
+      DEVELOPER_DIR: /Applications/Xcode_26.6.app/Contents/Developer
     strategy:
       fail-fast: false
       matrix:
@@ -30,15 +32,25 @@ jobs:
       - uses: actions/setup-python@v7
         with:
           python-version: '3.14'
-      - uses: actions/setup-node@v7
-        with:
-          node-version: '24'
-      - run: .codex/setup.sh
+      - run: .codex/setup.sh --ios
       - run: brew install xcodegen
       - run: .venv/bin/inv check-ios-package
       - run: .venv/bin/inv build-ios-simulator
+      - name: Create isolated simulator
+        id: simulator
+        env:
+          DEVICE_NAME: ${{ matrix.device }}
+        run: |
+          device_id=$(xcrun simctl create "Tracy CI" "$DEVICE_NAME" com.apple.CoreSimulator.SimRuntime.iOS-26-5)
+          echo "id=$device_id" >> "$GITHUB_OUTPUT"
+          xcrun simctl boot "$device_id"
+          xcrun simctl bootstatus "$device_id" -b
+          xcrun simctl ui "$device_id" appearance light
       - name: Native UI smoke tests
-        run: .venv/bin/inv check-ios-ui --destination="platform=iOS Simulator,name=${{ matrix.device }}"
+        run: .venv/bin/inv check-ios-ui --destination="platform=iOS Simulator,id=${{ steps.simulator.outputs.id }}"
+      - name: Remove isolated simulator
+        if: always() && steps.simulator.outputs.id != ''
+        run: xcrun simctl delete "${{ steps.simulator.outputs.id }}"
       - if: always()
         uses: actions/upload-artifact@v7
         with:

@@ -2,7 +2,7 @@
 
 ## Build and test rules
 
-Run `.codex/setup.sh` before validation. Prefer the shared Invoke entrypoints over ad-hoc
+Run `.codex/setup.sh` before validation (`.codex/setup.sh --ios` for native-only checks). Prefer the shared Invoke entrypoints over ad-hoc
 commands whenever an Invoke task exists.
 
 - `.venv/bin/inv install-deps` installs Python and JavaScript dependencies.
