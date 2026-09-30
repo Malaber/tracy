@@ -117,3 +117,9 @@ GitHub Actions runs native E2E on iPhone and iPad, retains result bundles/screen
 and exercises offline editing across process restarts plus light/dark accessibility checks.
 The web E2E registers a real virtual passkey, exchanges a native PKCE token, verifies idempotent
 retries and stale-write conflicts against the running backend, and deletes the account.
+
+Accessibility CI audits light and dark appearance in separate app launches. It waits for the
+Today edit control before auditing and retries only XCTest accessibility-service timeout
+`com.apple.xcode.xctest.accessibilityAudit` code `-56` once, after relaunch. Actual accessibility
+findings and repeated timeouts still fail the run; diagnostic attachments remain in the result
+bundle. PRs and main pushes each run one iPhone/iPad matrix, without a duplicate branch-push run.

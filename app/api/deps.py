@@ -11,7 +11,6 @@ from app.core.database import get_db
 from app.models import AuthSession, User
 from app.services.auth_sessions import _auth_session_is_valid, _now_utc, get_session_user
 
-
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/v1/auth/login/verify", auto_error=False)
 
 

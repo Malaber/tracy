@@ -11,7 +11,6 @@ from pathlib import Path
 
 from invoke import task
 
-
 ROOT = Path(__file__).resolve().parent
 STABLE_TAG_PATTERN = re.compile(r"^v(\d+)\.(\d+)\.(\d+)$")
 

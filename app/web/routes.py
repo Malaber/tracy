@@ -9,7 +9,6 @@ from app.core.database import get_db
 from app.models import User
 from app.services.auth_sessions import get_session_user, revoke_auth_session
 
-
 router = APIRouter()
 templates = Jinja2Templates(directory="app/web/templates")
 install_fastpasskey_templates(templates.env)

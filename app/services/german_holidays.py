@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from datetime import date, timedelta
 
-
 FEDERAL_STATES = {
     "DE": "Germany · national holidays only",
     "BW": "Baden-Württemberg",

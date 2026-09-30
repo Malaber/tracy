@@ -14,7 +14,6 @@ from app.core.config import settings
 from app.core.database import run_migrations
 from app.web.routes import router as web_router
 
-
 logger = logging.getLogger(__name__)
 
 

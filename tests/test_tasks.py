@@ -3,7 +3,6 @@ from pathlib import Path
 
 import pytest
 
-
 TASKS_PATH = Path(__file__).resolve().parents[1] / "tasks.py"
 TASKS_SPEC = importlib.util.spec_from_file_location("tasks", TASKS_PATH)
 assert TASKS_SPEC is not None

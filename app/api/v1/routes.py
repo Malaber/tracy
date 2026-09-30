@@ -38,7 +38,6 @@ from app.services.time_calculation import (
     round_up,
 )
 
-
 router = APIRouter()
 
 
