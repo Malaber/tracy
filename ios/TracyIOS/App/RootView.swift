@@ -27,6 +27,7 @@ struct RootView: View {
         }
         .task {
             await store.refresh()
+            if store.isDemo { return }
             while !Task.isCancelled {
                 do { try await Task.sleep(for: .seconds(60)) } catch { return }
                 if scenePhase == .active { await store.refresh() }
@@ -190,7 +191,8 @@ struct RecentDaysView: View {
         let calendar = Clock.calendar(timezone: store.snapshot.timezone)
         return (0..<14).map {
             Clock.day(
-                calendar.date(byAdding: .day, value: -$0, to: Date())!, timezone: store.snapshot.timezone)
+                calendar.date(byAdding: .day, value: -$0, to: store.currentDate)!,
+                timezone: store.snapshot.timezone)
         }
     }
 

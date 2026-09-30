@@ -28,7 +28,9 @@ final class AppStore: ObservableObject {
         do {
             if ProcessInfo.processInfo.arguments.contains("--ui-testing") {
                 #if DEBUG
+                    UserDefaults.standard.set("light", forKey: "appearance")
                     try openDemo()
+                    return
                 #endif
             } else if let saved = try CredentialStore.read() {
                 try activate(saved)
@@ -154,11 +156,11 @@ final class AppStore: ObservableObject {
     }
 
     func quickAction(checkOut: Bool) {
-        currentDate = Date()
+        if !isDemo { currentDate = Date() }
         do {
             var payload = entry(today).payload
             let calendar = Clock.calendar(timezone: snapshot.timezone)
-            let time = calendar.dateComponents([.hour, .minute], from: Date())
+            let time = calendar.dateComponents([.hour, .minute], from: currentDate)
             let clock = String(format: "%02d:%02d", time.hour!, time.minute!)
             if checkOut { payload.checkOut = clock } else { payload.checkIn = clock }
             try save(date: today, payload: payload, baseRevision: entry(today).revision)
@@ -174,7 +176,7 @@ final class AppStore: ObservableObject {
     }
 
     func refresh() async {
-        currentDate = Date()
+        if !isDemo { currentDate = Date() }
         guard !isSyncing, isOnline, !isDemo, !needsSignIn, let api, let journal else { return }
         isSyncing = true
         defer {
@@ -217,6 +219,7 @@ final class AppStore: ObservableObject {
     #if DEBUG
         private func openDemo() throws {
             isDemo = true
+            currentDate = Date(timeIntervalSince1970: 1_790_784_000)  // 2026-09-30 16:00 UTC
             let file = FileManager.default.temporaryDirectory.appending(
                 path:
                     "tracy-ui-\(ProcessInfo.processInfo.environment["TRACY_UI_JOURNAL"] ?? UUID().uuidString).json"
@@ -229,7 +232,7 @@ final class AppStore: ObservableObject {
                 snapshot = journal.snapshot
                 return
             }
-            let today = Clock.day(Date(), timezone: "Europe/Berlin")
+            let today = Clock.day(currentDate, timezone: "Europe/Berlin")
             var entry = WorkEntry.empty(date: today)
             entry.checkIn = "08:30"
             entry.status = "in_progress"
@@ -239,7 +242,7 @@ final class AppStore: ObservableObject {
             var entries = [entry]
             var days: [[String: Any]] = []
             for offset in (0..<14).reversed() {
-                let day = calendar.date(byAdding: .day, value: -offset, to: Date())!
+                let day = calendar.date(byAdding: .day, value: -offset, to: currentDate)!
                 let key = Clock.day(day, timezone: "Europe/Berlin")
                 let weekend = calendar.isDateInWeekend(day)
                 let dayOff = offset == 5

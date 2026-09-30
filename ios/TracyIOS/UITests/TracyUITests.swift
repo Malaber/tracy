@@ -1,43 +1,110 @@
 import XCTest
 
 final class TracyUITests: XCTestCase {
+    private var testArguments: [String] {
+        [
+            "--ui-testing", "-AppleLanguages", "(en)", "-AppleLocale", "en_US",
+            "-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryL",
+        ]
+    }
+
     @MainActor
-    func testTodayAccessibilityAudit() throws {
+    func testTodayLightContrast() throws {
+        try auditToday(appearance: "light", category: .contrast, name: "Contrast")
+    }
+
+    @MainActor
+    func testTodayLightHitRegions() throws {
+        try auditToday(appearance: "light", category: .hitRegion, name: "HitRegions")
+    }
+
+    @MainActor
+    func testTodayLightDescriptions() throws {
+        try auditToday(appearance: "light", category: .sufficientElementDescription, name: "Descriptions")
+    }
+
+    @MainActor
+    func testTodayLightClipping() throws {
+        try auditToday(appearance: "light", category: .textClipped, name: "Clipping")
+    }
+
+    @MainActor
+    func testTodayLightTraits() throws {
+        try auditToday(appearance: "light", category: .trait, name: "Traits")
+    }
+
+    @MainActor
+    func testTodayDarkContrast() throws {
+        try auditToday(appearance: "dark", category: .contrast, name: "Contrast")
+    }
+
+    @MainActor
+    func testTodayDarkHitRegions() throws {
+        try auditToday(appearance: "dark", category: .hitRegion, name: "HitRegions")
+    }
+
+    @MainActor
+    func testTodayDarkDescriptions() throws {
+        try auditToday(appearance: "dark", category: .sufficientElementDescription, name: "Descriptions")
+    }
+
+    @MainActor
+    func testTodayDarkClipping() throws {
+        try auditToday(appearance: "dark", category: .textClipped, name: "Clipping")
+    }
+
+    @MainActor
+    func testTodayDarkTraits() throws {
+        try auditToday(appearance: "dark", category: .trait, name: "Traits")
+    }
+
+    @MainActor
+    private func auditToday(appearance: String, category: XCUIAccessibilityAuditType, name: String) throws {
         let app = XCUIApplication()
-        app.launchArguments = ["--ui-testing"]
+        // Launch directly in the audited appearance, without a live scheme transition.
+        app.launchArguments = testArguments + ["-appearance", appearance]
         app.launch()
-        XCTAssertTrue(app.buttons["Today"].firstMatch.waitForExistence(timeout: 10))
-        for appearance in ["Light", "Dark"] {
-            app.buttons["Settings"].firstMatch.tap()
-            app.buttons["appearancePicker"].tap()
-            app.buttons[appearance].tap()
-            app.buttons["Today"].firstMatch.tap()
-            try app.performAccessibilityAudit(for: [
-                .contrast, .hitRegion, .sufficientElementDescription, .textClipped, .trait,
-            ]) { issue in
-                print(
-                    "Accessibility audit: \(issue.detailedDescription); element: \(String(describing: issue.element))"
-                )
-                return false
-            }
-            let screenshot = XCTAttachment(screenshot: app.screenshot())
-            screenshot.name = "Today-\(appearance)"
-            screenshot.lifetime = .keepAlways
-            add(screenshot)
+        defer { app.terminate() }
+        XCTAssertTrue(app.buttons["editToday"].waitForExistence(timeout: 15))
+        // Application screenshots resolve an accessibility snapshot. After an audit the
+        // hosted iPad service can stop answering those queries. Screen capture does not
+        // query the app hierarchy; collect evidence before handing control to the audit.
+        let screenshot = XCTAttachment(screenshot: XCUIScreen.main.screenshot())
+        screenshot.name = "Today-\(appearance)-\(name)"
+        screenshot.lifetime = .keepAlways
+        add(screenshot)
+        // One category per fresh launch reduces work under the service's fixed
+        // timeout and identifies the failing category without retries.
+        try app.performAccessibilityAudit(for: category) { issue in
+            // Do not resolve issue.element: that performs another accessibility query
+            // while the audit service is handling a finding.
+            print("Accessibility audit: \(issue.detailedDescription)")
+            return false
         }
     }
 
     @MainActor
     func testOfflineEntryAndReviewNavigation() throws {
         let app = XCUIApplication()
-        app.launchArguments = ["--ui-testing"]
+        app.launchArguments = testArguments
         app.launchEnvironment["TRACY_UI_JOURNAL"] = UUID().uuidString
         app.launch()
         XCTAssertTrue(app.buttons["editToday"].waitForExistence(timeout: 10))
         app.buttons["editToday"].tap()
-        let notes = app.textFields["entryNotes"]
-        app.swipeUp()
-        XCTAssertTrue(notes.waitForExistence(timeout: 3))
+        let form = app.descendants(matching: .any).matching(identifier: "entryForm").firstMatch
+        XCTAssertTrue(form.waitForExistence(timeout: 15))
+        // SwiftUI's multiline field can expose TextField or TextView across OS versions.
+        let notes = app.descendants(matching: .any).matching(identifier: "entryNotes").firstMatch
+        // Scroll only the editor, and only until the target is visible. The iPad sheet
+        // doesn't cover the whole app, so a full-application swipe can hit its backdrop.
+        for _ in 0..<6 {
+            if notes.exists && notes.isHittable { break }
+            form.swipeUp()
+        }
+        guard notes.waitForExistence(timeout: 15), notes.isHittable else {
+            XCTFail("Notes control did not become visible inside the editor")
+            return
+        }
         notes.tap()
         notes.typeText("Offline project notes")
         app.buttons["saveEntry"].tap()
@@ -55,7 +122,8 @@ final class TracyUITests: XCTestCase {
     func testAppearanceAndAccessibility() throws {
         let app = XCUIApplication()
         app.launchArguments = [
-            "--ui-testing", "-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryAccessibilityXXXL",
+            "--ui-testing", "-AppleLanguages", "(en)", "-AppleLocale", "en_US",
+            "-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryAccessibilityXXXL",
         ]
         app.launch()
         XCTAssertTrue(app.buttons["Settings"].firstMatch.waitForExistence(timeout: 10))

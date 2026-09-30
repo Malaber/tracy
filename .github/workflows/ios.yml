@@ -2,9 +2,10 @@ name: iOS
 
 on:
   push:
-    paths: ['ios/**', 'tasks.py', '.github/workflows/ios.yml']
+    branches: [main]
+    paths: ['ios/**', 'tasks.py', '.codex/setup.sh', '.github/workflows/ios.yml']
   pull_request:
-    paths: ['ios/**', 'tasks.py', '.github/workflows/ios.yml']
+    paths: ['ios/**', 'tasks.py', '.codex/setup.sh', '.github/workflows/ios.yml']
   workflow_dispatch:
 
 permissions:
@@ -16,30 +17,59 @@ concurrency:
 
 jobs:
   native:
-    runs-on: macos-26
-    timeout-minutes: 30
+    runs-on: xcode-27
+    timeout-minutes: 45
+    env:
+      DEVELOPER_DIR: /Applications/Xcode_27.0.app/Contents/Developer
     strategy:
       fail-fast: false
       matrix:
         device: ['iPhone 17 Pro', 'iPad Pro 13-inch (M5)']
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
-      - uses: actions/setup-python@v6
+      - uses: actions/setup-python@v7
         with:
           python-version: '3.14'
-      - uses: actions/setup-node@v6
-        with:
-          node-version: '24'
-      - run: .codex/setup.sh
+      - name: Verify matching Xcode build
+        run: |
+          xcodebuild -version
+          test "$(xcodebuild -version)" = "$(printf 'Xcode 27.0\nBuild version 27A266a')"
+      - name: Install matching simulator runtime
+        run: xcodebuild -downloadPlatform iOS -buildVersion 26.2 -architectureVariant arm64
+      - name: Verify matching simulator build
+        run: |
+          xcrun simctl list runtimes --json > /tmp/tracy-runtimes.json
+          python3 - <<'PYTHON'
+          import json
+          with open("/tmp/tracy-runtimes.json") as source:
+              runtimes = json.load(source)["runtimes"]
+          runtime = next(r for r in runtimes if r["identifier"] == "com.apple.CoreSimulator.SimRuntime.iOS-26-2")
+          assert runtime["isAvailable"] and runtime["buildversion"] == "23C52", runtime
+          print(runtime)
+          PYTHON
+      - run: .codex/setup.sh --ios
       - run: brew install xcodegen
       - run: .venv/bin/inv check-ios-package
       - run: .venv/bin/inv build-ios-simulator
+      - name: Create isolated simulator
+        id: simulator
+        env:
+          DEVICE_NAME: ${{ matrix.device }}
+        run: |
+          device_id=$(xcrun simctl create "Tracy CI" "$DEVICE_NAME" com.apple.CoreSimulator.SimRuntime.iOS-26-2)
+          echo "id=$device_id" >> "$GITHUB_OUTPUT"
+          xcrun simctl boot "$device_id"
+          xcrun simctl bootstatus "$device_id" -b
+          xcrun simctl ui "$device_id" appearance light
       - name: Native UI smoke tests
-        run: .venv/bin/inv check-ios-ui --destination="platform=iOS Simulator,name=${{ matrix.device }}"
+        run: .venv/bin/inv check-ios-ui --destination="platform=iOS Simulator,id=${{ steps.simulator.outputs.id }}"
+      - name: Remove isolated simulator
+        if: always() && steps.simulator.outputs.id != ''
+        run: xcrun simctl delete "${{ steps.simulator.outputs.id }}"
       - if: always()
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: ios-test-results-${{ matrix.device }}
           path: ios/TracyIOS/DerivedData/Logs/Test/*.xcresult
