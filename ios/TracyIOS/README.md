@@ -119,7 +119,7 @@ The web E2E registers a real virtual passkey, exchanges a native PKCE token, ver
 retries and stale-write conflicts against the running backend, and deletes the account.
 
 Native CI uses `.codex/setup.sh --ios` to install only pinned Invoke, avoiding unrelated backend
-and Node downloads. Xcode 26.2 and iOS 26.2 are explicit; each job creates its own simulator.
+and Node downloads. Xcode 27.0 build 27A266a and iOS 26.2 build 23C52 are explicit; each job creates its own simulator.
 Tests use English/US locale, explicit text sizes, a fixed fixture clock, isolated journals,
 and fresh light/dark app launches. Demo mode does not start network monitoring or periodic refresh.
 Accessibility audits run once, without retries or ignored findings. PR and main device matrices
@@ -129,3 +129,8 @@ Each accessibility category (contrast, hit regions, descriptions, clipping, and 
 its own light and dark test and fresh app launch. This avoids submitting five categories
 under one audit-service deadline and makes any service failure attributable to one check.
 Screenshots use screen capture before auditing, with no app-hierarchy query in audit logging.
+
+CI uses the `xcode-27` runner image and downloads iOS 26.2 with Xcode's platform installer.
+Setup checks exact Xcode and simulator build identifiers before running tests, matching the
+local validation environment. A missing/mismatched build fails setup instead of silently
+running another toolchain. The hosted machine's hardware and macOS may still differ.

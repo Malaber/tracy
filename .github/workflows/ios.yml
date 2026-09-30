@@ -17,10 +17,10 @@ concurrency:
 
 jobs:
   native:
-    runs-on: macos-26
-    timeout-minutes: 30
+    runs-on: xcode-27
+    timeout-minutes: 45
     env:
-      DEVELOPER_DIR: /Applications/Xcode_26.2.app/Contents/Developer
+      DEVELOPER_DIR: /Applications/Xcode_27.0.app/Contents/Developer
     strategy:
       fail-fast: false
       matrix:
@@ -32,6 +32,23 @@ jobs:
       - uses: actions/setup-python@v7
         with:
           python-version: '3.14'
+      - name: Verify matching Xcode build
+        run: |
+          xcodebuild -version
+          test "$(xcodebuild -version)" = "$(printf 'Xcode 27.0\nBuild version 27A266a')"
+      - name: Install matching simulator runtime
+        run: xcodebuild -downloadPlatform iOS -buildVersion 26.2 -architectureVariant arm64
+      - name: Verify matching simulator build
+        run: |
+          xcrun simctl list runtimes --json > /tmp/tracy-runtimes.json
+          python3 - <<'PYTHON'
+          import json
+          with open("/tmp/tracy-runtimes.json") as source:
+              runtimes = json.load(source)["runtimes"]
+          runtime = next(r for r in runtimes if r["identifier"] == "com.apple.CoreSimulator.SimRuntime.iOS-26-2")
+          assert runtime["isAvailable"] and runtime["buildversion"] == "23C52", runtime
+          print(runtime)
+          PYTHON
       - run: .codex/setup.sh --ios
       - run: brew install xcodegen
       - run: .venv/bin/inv check-ios-package
