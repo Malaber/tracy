@@ -24,20 +24,21 @@ final class TracyUITests: XCTestCase {
         // Launch directly in the audited appearance, without a live scheme transition.
         app.launchArguments = testArguments + ["-appearance", appearance]
         app.launch()
-        defer {
-            let screenshot = XCTAttachment(screenshot: app.screenshot())
-            screenshot.name = "Today-\(appearance)"
-            screenshot.lifetime = .keepAlways
-            add(screenshot)
-            app.terminate()
-        }
+        defer { app.terminate() }
         XCTAssertTrue(app.buttons["editToday"].waitForExistence(timeout: 15))
+        // Application screenshots resolve an accessibility snapshot. After an audit the
+        // hosted iPad service can stop answering those queries. Screen capture does not
+        // query the app hierarchy; collect evidence before handing control to the audit.
+        let screenshot = XCTAttachment(screenshot: XCUIScreen.main.screenshot())
+        screenshot.name = "Today-\(appearance)"
+        screenshot.lifetime = .keepAlways
+        add(screenshot)
         try app.performAccessibilityAudit(for: [
             .contrast, .hitRegion, .sufficientElementDescription, .textClipped, .trait,
         ]) { issue in
-            print(
-                "Accessibility audit: \(issue.detailedDescription); element: \(String(describing: issue.element))"
-            )
+            // Do not resolve issue.element: that performs another accessibility query
+            // while the audit service is handling a finding.
+            print("Accessibility audit: \(issue.detailedDescription)")
             return false
         }
     }
