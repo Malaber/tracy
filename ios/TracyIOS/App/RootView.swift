@@ -114,7 +114,7 @@ struct TodayView: View {
                     Button("Edit today’s entry", systemImage: "square.and.pencil") { editing = entry }
                         .accessibilityIdentifier("editToday")
                 } header: {
-                    Text("Your day").foregroundStyle(.primary)
+                    Text("Your day").foregroundStyle(Color(uiColor: .label))
                 }
                 if let remote = store.conflict(store.today) {
                     Section {
@@ -136,19 +136,11 @@ struct TodayView: View {
                         NavigationLink {
                             RecentDaysView()
                         } label: {
-                            Label(
-                                "\(attention.count) recent days need a look",
-                                systemImage: "calendar.badge.exclamationmark")
+                            Text("\(attention.count) recent days need a look")
                         }
                     }
                 }
                 SyncStatus()
-                Section {
-                    Text(
-                        "Times use \(store.snapshot.timezone). You can enter and correct time without a connection."
-                    )
-                    .font(.footnote).foregroundStyle(.primary)
-                }
             }
             .navigationTitle("Today")
             .refreshable { await store.refresh() }
