@@ -33,6 +33,13 @@ public final class OfflineJournal {
         }
     }
 
+    public func erase() throws {
+        if FileManager.default.fileExists(atPath: file.path) {
+            try FileManager.default.removeItem(at: file)
+        }
+        snapshot = JournalSnapshot()
+    }
+
     private func commit(_ next: JournalSnapshot) throws {
         try FileManager.default.createDirectory(
             at: file.deletingLastPathComponent(), withIntermediateDirectories: true)

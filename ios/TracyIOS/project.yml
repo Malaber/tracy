@@ -20,12 +20,15 @@ targets:
         buildPhase: resources
     dependencies:
       - package: TracyCore
+    configFiles:
+      Debug: Version.xcconfig
+      Release: Version.xcconfig
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: de.malaber.tracy
         PRODUCT_NAME: Tracy
-        MARKETING_VERSION: 0.1.0
-        CURRENT_PROJECT_VERSION: 1
+        MARKETING_VERSION: "$(inherited)"
+        CURRENT_PROJECT_VERSION: 2
         TARGETED_DEVICE_FAMILY: '1,2'
         SUPPORTS_MACCATALYST: NO
         GENERATE_INFOPLIST_FILE: YES

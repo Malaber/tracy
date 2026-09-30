@@ -277,9 +277,24 @@ def start(c, host="127.0.0.1", port=8000, reload=False):
 IOS_ROOT = ROOT / "ios" / "TracyIOS"
 
 
+def _ios_release_version(tags: list[str], head_tags: list[str]) -> str:
+    stable = [tag for tag in head_tags if STABLE_TAG_PATTERN.fullmatch(tag)]
+    if stable:
+        return _latest_stable_version_from_tags(stable)
+    return _compute_version_values("main", 1, tags)["base_version"]
+
+
+def _current_ios_version() -> str:
+    return _ios_release_version(
+        _git_lines("tag", "--list", "v*"), _git_lines("tag", "--points-at", "HEAD")
+    )
+
+
 @task
 def generate_ios_project(c):
     """Generate the native Xcode project (requires XcodeGen)."""
+    version = _current_ios_version()
+    (IOS_ROOT / "Version.xcconfig").write_text(f"MARKETING_VERSION = {version}\n", encoding="utf-8")
     c.run(f"xcodegen generate --spec {shlex.quote(str(IOS_ROOT / 'project.yml'))}")
 
 
@@ -307,12 +322,13 @@ def check_ios_ui(c, destination="platform=iOS Simulator,name=iPhone 17 Pro"):
         f"xcodebuild -project {shlex.quote(str(IOS_ROOT / 'TracyApp.xcodeproj'))} "
         f"-scheme Tracy -destination {shlex.quote(destination)} "
         f"-derivedDataPath {shlex.quote(str(IOS_ROOT / 'DerivedData'))} "
-        "CODE_SIGNING_ALLOWED=NO test"
+        "-parallel-testing-enabled NO CODE_SIGNING_ALLOWED=NO test"
     )
 
 
-@task
-def upload_ios_testflight(c, version="0.1.0", build_number="1"):
+@task(generate_ios_project)
+def upload_ios_testflight(c, build_number="1"):
+    version = _current_ios_version()
     """Archive, sign, and upload a validated iOS build to App Store Connect."""
     if not re.fullmatch(r"\d+\.\d+\.\d+", version):
         raise ValueError("version must be major.minor.patch")

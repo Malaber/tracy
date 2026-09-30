@@ -78,19 +78,16 @@ struct TodayView: View {
             List {
                 Section {
                     VStack(alignment: .leading, spacing: 14) {
-                        Label(Clock.title(store.today), systemImage: "sun.max")
+                        Text(Clock.title(store.today))
                             .font(.subheadline).foregroundStyle(.primary)
                         Text(headline).font(.largeTitle.bold()).accessibilityAddTraits(.isHeader)
-                        Text(subtitle).foregroundStyle(.primary)
+                        Text(subtitle).foregroundStyle(Color(uiColor: .label)).padding(.bottom, 12)
                         if entry.checkIn == nil || entry.checkOut == nil {
                             Button {
                                 store.quickAction(checkOut: entry.checkIn != nil)
                             } label: {
-                                Label(
-                                    entry.checkIn == nil ? "Check in now" : "Check out now",
-                                    systemImage: entry.checkIn == nil ? "play.fill" : "stop.fill"
-                                )
-                                .font(.headline).frame(maxWidth: .infinity).padding(.vertical, 8)
+                                Text(entry.checkIn == nil ? "Check in now" : "Check out now")
+                                    .font(.headline).frame(maxWidth: .infinity).padding(.vertical, 8)
                             }
                             .modifier(PrimaryActionStyle())
                             .accessibilityIdentifier("quickAction")
@@ -99,19 +96,19 @@ struct TodayView: View {
                     .padding(.vertical, 12)
                 }
                 Section {
-                    LabeledContent("Check-in", value: entry.checkIn ?? "Not entered")
-                    LabeledContent(
+                    dayValue("Check-in", value: entry.checkIn ?? "Not entered")
+                    dayValue(
                         "Check-out",
                         value: (entry.checkOut ?? "Not entered")
                             + (entry.checkOutNextDay ? " · next day" : ""))
                     if !store.isPending(store.today) {
-                        LabeledContent("Breaks", value: Clock.duration(entry.breakMinutes))
+                        dayValue("Breaks", value: Clock.duration(entry.breakMinutes))
                         if let billable = entry.billableMinutes {
-                            LabeledContent("Billable", value: Clock.duration(billable))
+                            dayValue("Billable", value: Clock.duration(billable))
                         }
                     }
                     if !entry.notes.isEmpty { Text(entry.notes) }
-                    Button("Edit today’s entry", systemImage: "square.and.pencil") { editing = entry }
+                    Button("Edit today’s entry") { editing = entry }
                         .accessibilityIdentifier("editToday")
                 } header: {
                     Text("Your day").foregroundStyle(Color(uiColor: .label))
@@ -145,6 +142,12 @@ struct TodayView: View {
             .navigationTitle("Today")
             .refreshable { await store.refresh() }
             .sheet(item: $editing) { EntryEditor(entry: $0) }
+        }
+    }
+
+    private func dayValue(_ label: String, value: String) -> some View {
+        LabeledContent(label) {
+            Text(value).foregroundStyle(.primary)
         }
     }
 

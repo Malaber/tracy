@@ -88,11 +88,32 @@ can work. Verify actual passkey registration/login on a signed physical device b
 ## App Store delivery
 
 The source includes a layered light/dark app icon derived from Tracy's existing vector mark and a
-privacy manifest for local appearance preferences and account/work data used by the server. No App Store record has been created or uploaded
-by this implementation. Create an iOS record named **Tracy Time Tracking**, using **de.malaber.tracy**
-for both SKU and bundle ID. Confirm signing, complete privacy disclosures for account identifiers
-and user-entered work data stored on the chosen server, provide a privacy policy/support URL,
-capture iPhone/iPad screenshots, and archive in Xcode for TestFlight. Set release versions through
-`MARKETING_VERSION` and `CURRENT_PROJECT_VERSION`.
+privacy manifest for local appearance preferences and account/work data used by the server.
+App Store Connect contains **Tracy Time Tracking**, using **de.malaber.tracy** for both SKU and
+bundle ID. Version **0.1.0 (1)** was accepted for TestFlight processing on September 30, 2026.
+
+Upload subsequent builds through the signed-in Xcode account without a browser:
+
+```sh
+.venv/bin/inv upload-ios-testflight --build-number=2
+```
+
+The task archives with automatic signing and uploads using Xcode's distribution service. Choose a
+new build number for each upload. Marketing version comes from the stable tag on HEAD, or the
+next patch computed by the shared release logic when HEAD is untagged. Fetch tags before building.
+This PR targets 0.1.7 after v0.1.6; a future v0.2.0 tag sets the app version to 0.2.0. Apple processing and tester availability happen after upload.
+Before public App Store release, complete privacy disclosures for account identifiers and work data,
+provide privacy policy/support URLs, capture iPhone/iPad screenshots, and verify passkey sign-in on
+a physical device against the deployed backend.
 
 The native controls follow [Apple’s Liquid Glass guidance](https://developer.apple.com/documentation/TechnologyOverviews/adopting-liquid-glass). Authentication uses [ASWebAuthenticationSession](https://developer.apple.com/documentation/authenticationservices/aswebauthenticationsession).
+
+App Store metadata URLs (public, no sign-in):
+- Support: https://tracy.malaber.de/support
+- Privacy: https://tracy.malaber.de/privacy
+- Marketing: https://tracy.malaber.de/app
+
+GitHub Actions runs native E2E on iPhone and iPad, retains result bundles/screenshots even on success,
+and exercises offline editing across process restarts plus light/dark accessibility checks.
+The web E2E registers a real virtual passkey, exchanges a native PKCE token, verifies idempotent
+retries and stale-write conflicts against the running backend, and deletes the account.

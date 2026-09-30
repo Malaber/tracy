@@ -254,3 +254,13 @@ private actor MockServer: EntrySyncService {
     #expect(journal.snapshot.pending.first?.conflict?.notes == "New web edit")
     #expect(try await server.entry(original.date).notes == "New web edit")
 }
+
+@MainActor @Test func accountCacheErasurePersists() throws {
+    let file = FileManager.default.temporaryDirectory.appending(path: "erase-\(UUID().uuidString).json")
+    let journal = try OfflineJournal(file: file)
+    try journal.cache(entries: [.empty(date: "2026-09-30")])
+    #expect(FileManager.default.fileExists(atPath: file.path))
+    try journal.erase()
+    #expect(!FileManager.default.fileExists(atPath: file.path))
+    #expect(try OfflineJournal(file: file).snapshot.entries.isEmpty)
+}

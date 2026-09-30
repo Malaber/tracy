@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { createHash, randomBytes, randomUUID } from "node:crypto";
 import fsSync from "node:fs";
 import fs from "node:fs/promises";
 import path from "node:path";
@@ -201,9 +202,57 @@ async function main() {
     assert(!(await remainingRow.innerText()).includes("{date}"));
     assert(!(await page.locator("[data-passkey-name-form]").isVisible()));
     await page.screenshot({ path: path.join(artifactDir, "passkey-flow.png"), fullPage: true });
+    log("Checking public App Store pages without a session");
+    const publicContext = await browser.newContext();
+    const publicPage = await publicContext.newPage();
+    for (const route of ["app", "support", "privacy"]) {
+      await publicPage.goto(new URL(`/${route}`, baseUrl).toString());
+      await publicPage.getByRole("heading", { level: 1 }).waitFor();
+      assert(await publicPage.locator('a[href="mailto:tracy@schaedler.rocks"]').count());
+      await publicPage.screenshot({ path: path.join(artifactDir, `${route}.png`), fullPage: true });
+    }
+    await publicContext.close();
+
+    log("Exchanging passkey session for native PKCE token");
+    const verifier = randomBytes(32).toString("base64url");
+    const state = randomBytes(32).toString("base64url");
+    const challenge = createHash("sha256").update(verifier).digest("base64url");
+    const authorization = await context.request.get(new URL("/api/v1/auth/mobile/authorize", baseUrl).toString(), {
+      params: { state, code_challenge: challenge }, maxRedirects: 0,
+    });
+    assert.equal(authorization.status(), 303);
+    const callback = new URL(authorization.headers().location);
+    assert.equal(callback.protocol, "de.malaber.tracy:");
+    assert.equal(callback.searchParams.get("state"), state);
+    const exchange = await context.request.post(new URL("/api/v1/auth/mobile/token", baseUrl).toString(), {
+      data: { code: callback.searchParams.get("code"), code_verifier: verifier },
+    });
+    assert.equal(exchange.status(), 200);
+    const { access_token: nativeToken } = await exchange.json();
+    const native = await browser.newContext({ extraHTTPHeaders: { Authorization: `Bearer ${nativeToken}` } });
+    const entryURL = new URL("/api/v1/entries/2026-01-07", baseUrl).toString();
+    const mutationHeaders = { "If-Match": "missing", "Idempotency-Key": randomUUID() };
+    const payload = { check_in: "08:00", check_out: "17:00", notes: "Queued native edit" };
+    const first = await native.request.put(entryURL, { headers: mutationHeaders, data: payload });
+    assert.equal(first.status(), 200);
+    const firstEntry = await first.json();
+    const retry = await native.request.put(entryURL, { headers: mutationHeaders, data: payload });
+    assert.deepEqual(await retry.json(), firstEntry, "Lost-response retry must be idempotent");
+    const webEdit = await context.request.put(entryURL, { data: { ...payload, notes: "Newer web edit" } });
+    assert.equal(webEdit.status(), 200);
+    const conflict = await native.request.put(entryURL, {
+      headers: { "If-Match": firstEntry.revision }, data: payload,
+    });
+    assert.equal(conflict.status(), 409);
+    assert.equal((await (await native.request.get(entryURL)).json()).notes, "Newer web edit");
+    log("Deleting account and verifying native session revocation");
+    const deletion = await native.request.delete(new URL("/api/v1/account", baseUrl).toString());
+    assert.equal(deletion.status(), 204);
+    assert.equal((await native.request.get(entryURL)).status(), 401);
+    await native.close();
     await fs.writeFile(
       path.join(artifactDir, "summary.md"),
-      "Passkey registration, protected write, management, logout, login, and data persistence passed.\n",
+      "Passkey registration, login, data persistence, public store pages, native PKCE, idempotent retry, conflict protection, and account deletion passed.\n",
     );
     log("Passkey flow passed");
   } finally {

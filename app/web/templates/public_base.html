@@ -1,0 +1,18 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light dark">
+  <title>{% block title %}{% endblock %} · Tracy Time Tracking</title>
+  <link rel="icon" href="/static/img/tracy.svg" type="image/svg+xml">
+  <link rel="canonical" href="https://tracy.malaber.de{{ request.url.path }}">
+  <link rel="stylesheet" href="/static/public.css">
+</head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+<header><a class="brand" href="/app">Tracy Time Tracking</a><nav aria-label="Main navigation"><a href="/app">App</a><a href="/support">Support</a><a href="/privacy">Privacy</a><a href="/login">Sign in</a></nav></header>
+<main id="main">{% block content %}{% endblock %}</main>
+<footer><a href="mailto:tracy@schaedler.rocks">tracy@schaedler.rocks</a><a href="https://github.com/Malaber/tracy">Source on GitHub</a></footer>
+</body>
+</html>

@@ -15,7 +15,16 @@ from sqlalchemy.orm.exc import StaleDataError
 from app.api.deps import get_current_user
 from app.core.config import settings
 from app.core.database import get_db
-from app.models import BreakEntry, DayOff, Preferences, User, WorkEntry
+from app.models import (
+    AuthSession,
+    BreakEntry,
+    DayOff,
+    MobileAuthorization,
+    Passkey,
+    Preferences,
+    User,
+    WorkEntry,
+)
 from app.schemas.time_tracking import DayOffRangePayload, PreferencesPayload, WorkEntryPayload
 from app.services.german_holidays import FEDERAL_STATES
 from app.services.statistics import build_statistics, period_bounds
@@ -537,3 +546,18 @@ async def export_statistics(
         media_type="text/csv",
         headers={"Content-Disposition": f'attachment; filename="{filename}"'},
     )
+
+
+@router.delete("/account", status_code=204)
+async def delete_account(
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> Response:
+    # Explicit deletion also works for SQLite connections without FK cascades enabled.
+    entry_ids = select(WorkEntry.id).where(WorkEntry.user_id == user.id)
+    await db.execute(delete(BreakEntry).where(BreakEntry.work_entry_id.in_(entry_ids)))
+    for model in (WorkEntry, DayOff, Preferences, MobileAuthorization, AuthSession, Passkey):
+        await db.execute(delete(model).where(model.user_id == user.id))
+    await db.execute(delete(User).where(User.id == user.id))
+    await db.commit()
+    return Response(status_code=204)

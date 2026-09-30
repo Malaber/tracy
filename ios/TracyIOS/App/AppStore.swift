@@ -113,6 +113,19 @@ final class AppStore: ObservableObject {
         } catch { self.error = error.localizedDescription }
     }
 
+    func deleteAccount() async {
+        guard pendingCount == 0, !isSyncing, let api, !isDemo else { return }
+        do {
+            _ = try await api.data("account", method: "DELETE")
+            try journal?.erase()
+            try CredentialStore.remove()
+            credential = nil
+            journal = nil
+            snapshot = JournalSnapshot()
+            needsSignIn = false
+        } catch { self.error = error.localizedDescription }
+    }
+
     func entry(_ date: String) -> WorkEntry { journal?.entry(date) ?? .empty(date: date) }
     func isPending(_ date: String) -> Bool { snapshot.pending.contains { $0.date == date } }
     func conflict(_ date: String) -> WorkEntry? {
@@ -205,11 +218,17 @@ final class AppStore: ObservableObject {
         private func openDemo() throws {
             isDemo = true
             let file = FileManager.default.temporaryDirectory.appending(
-                path: "tracy-ui-\(UUID().uuidString).json")
+                path:
+                    "tracy-ui-\(ProcessInfo.processInfo.environment["TRACY_UI_JOURNAL"] ?? UUID().uuidString).json"
+            )
             let journal = try OfflineJournal(file: file)
             self.journal = journal
             self.credential = Credential(
                 server: URL(string: "https://tracy.example")!, token: "demo", userID: "demo")
+            if !journal.snapshot.entries.isEmpty {
+                snapshot = journal.snapshot
+                return
+            }
             let today = Clock.day(Date(), timezone: "Europe/Berlin")
             var entry = WorkEntry.empty(date: today)
             entry.checkIn = "08:30"

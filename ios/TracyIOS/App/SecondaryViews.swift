@@ -45,6 +45,8 @@ struct SignInView: View {
                         "Sign in or create an account securely in the system browser. After your first sign-in, you can record time offline and sync it later."
                     )
                     .font(.footnote).foregroundStyle(.secondary)
+                    Link("Support", destination: URL(string: "https://tracy.malaber.de/support")!)
+                    Link("Privacy policy", destination: URL(string: "https://tracy.malaber.de/privacy")!)
                 }
             }
             .navigationTitle("Tracy")
@@ -57,6 +59,7 @@ struct SettingsView: View {
     @EnvironmentObject private var store: AppStore
     @AppStorage("appearance") private var appearance = "system"
     @State private var confirmSignOut = false
+    @State private var confirmDeletion = false
     @State private var signingIn = false
 
     var body: some View {
@@ -103,6 +106,8 @@ struct SettingsView: View {
                         }
                         Link("Account and work preferences", destination: server)
                     }
+                    Button("Delete account", role: .destructive) { confirmDeletion = true }
+                        .disabled(store.pendingCount > 0 || store.isSyncing || store.isDemo)
                     Button("Sign out", role: .destructive) { confirmSignOut = true }
                         .disabled(store.pendingCount > 0 || store.isSyncing)
                 } header: {
@@ -111,6 +116,8 @@ struct SettingsView: View {
                     Text("Sync pending entries before signing out or switching accounts.")
                 }
                 Section {
+                    Link("Support", destination: URL(string: "https://tracy.malaber.de/support")!)
+                    Link("Privacy policy", destination: URL(string: "https://tracy.malaber.de/privacy")!)
                     LabeledContent("App", value: "Tracy Time Tracking")
                     LabeledContent(
                         "Version",
@@ -118,6 +125,18 @@ struct SettingsView: View {
                 }
             }
             .navigationTitle("Settings")
+            .confirmationDialog(
+                "Permanently delete your account and all work records?", isPresented: $confirmDeletion,
+                titleVisibility: .visible
+            ) {
+                Button("Delete account permanently", role: .destructive) {
+                    Task { await store.deleteAccount() }
+                }
+            } message: {
+                Text(
+                    "This removes your server account, passkeys, sessions, work entries, and local cache. This cannot be undone. Sync pending entries first."
+                )
+            }
             .confirmationDialog(
                 "Sign out of Tracy on this device?", isPresented: $confirmSignOut, titleVisibility: .visible
             ) {

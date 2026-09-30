@@ -64,3 +64,10 @@ def test_deployment_defaults_to_latest_ghcr_image():
     assert "pull_policy: always" in compose
     assert "ARG TRACY_VERSION" in dockerfile
     assert "SETUPTOOLS_SCM_PRETEND_VERSION=${TRACY_VERSION}" in dockerfile
+
+
+def test_ios_version_shares_release_tag_sequence():
+    assert tasks._ios_release_version(["v0.1.6"], []) == "0.1.7"
+    assert tasks._ios_release_version(["v0.1.6", "v0.1.7"], ["v0.1.7"]) == "0.1.7"
+    assert tasks._ios_release_version(["v0.2.0"], ["v0.2.0"]) == "0.2.0"
+    assert tasks._ios_release_version(["v0.2.0"], []) == "0.2.1"
