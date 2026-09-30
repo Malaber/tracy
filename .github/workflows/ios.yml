@@ -20,6 +20,7 @@ jobs:
     runs-on: xcode-27
     timeout-minutes: 45
     env:
+      IOS_RUNTIME_BUILD: 23C52
       DEVELOPER_DIR: /Applications/Xcode_27.0.app/Contents/Developer
     strategy:
       fail-fast: false
@@ -37,17 +38,21 @@ jobs:
           xcodebuild -version
           test "$(xcodebuild -version)" = "$(printf 'Xcode 27.0\nBuild version 27A266a')"
       - name: Install matching simulator runtime
-        run: xcodebuild -downloadPlatform iOS -buildVersion 26.2 -architectureVariant arm64
+        run: xcodebuild -downloadPlatform iOS -buildVersion "$IOS_RUNTIME_BUILD" -architectureVariant arm64
       - name: Verify matching simulator build
         run: |
           xcrun simctl list runtimes --json > /tmp/tracy-runtimes.json
           python3 - <<'PYTHON'
           import json
+          import os
           with open("/tmp/tracy-runtimes.json") as source:
               runtimes = json.load(source)["runtimes"]
           runtime = next(r for r in runtimes if r["identifier"] == "com.apple.CoreSimulator.SimRuntime.iOS-26-2")
-          assert runtime["isAvailable"] and runtime["buildversion"] == "23C52", runtime
-          print(runtime)
+          expected = os.environ["IOS_RUNTIME_BUILD"]
+          actual = runtime["buildversion"]
+          if not runtime["isAvailable"] or actual != expected:
+              raise SystemExit(f"Expected available iOS runtime {expected}; found {actual}, available={runtime['isAvailable']}")
+          print(f"Verified iOS {runtime['version']} build {actual}")
           PYTHON
       - run: .codex/setup.sh --ios
       - run: brew install xcodegen
