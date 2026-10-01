@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		00B7067482423FB58C459CEA /* LayoutCheckedText.swift in Sources */ = {isa = PBXBuildFile; fileRef = 44373DA96AA94049011C34A8 /* LayoutCheckedText.swift */; };
 		259AD5AD43EAFB21CE9E7247 /* TracyApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 10D5BE15721AC2D1F2D61B97 /* TracyApp.swift */; };
 		4D7EF413837943296DDB362E /* AppIcon.icon in Resources */ = {isa = PBXBuildFile; fileRef = 763F0A35622A95792A596D6C /* AppIcon.icon */; };
 		57BAE984DF1870ADFF8336EA /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 6D5E4CBED1AD90C16D148AE0 /* Assets.xcassets */; };
@@ -36,6 +37,7 @@
 		1173BF00F583B4CD2C1E0F26 /* TracyUITests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = TracyUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		1548A00CD3A3757D68A4365D /* Tracy.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = Tracy.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		15B1267AAD0731C3290E34C0 /* Authentication.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Authentication.swift; sourceTree = "<group>"; };
+		44373DA96AA94049011C34A8 /* LayoutCheckedText.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LayoutCheckedText.swift; sourceTree = "<group>"; };
 		680A97BF9EE954CEA485AD2A /* Version.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Version.xcconfig; sourceTree = "<group>"; };
 		6D5E4CBED1AD90C16D148AE0 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		763F0A35622A95792A596D6C /* AppIcon.icon */ = {isa = PBXFileReference; lastKnownFileType = wrapper.icon; path = AppIcon.icon; sourceTree = "<group>"; };
@@ -106,6 +108,7 @@
 				15B1267AAD0731C3290E34C0 /* Authentication.swift */,
 				C983F527A8764079A8A2EAFF /* EntryEditor.swift */,
 				02B0D9A5212BEB67E006CBB1 /* Info.plist */,
+				44373DA96AA94049011C34A8 /* LayoutCheckedText.swift */,
 				8C8A6075C9BAFC929A7CBE99 /* PrivacyInfo.xcprivacy */,
 				C33D5B25355F68F0BC190404 /* RootView.swift */,
 				93589588D442ED5BA4AD47F8 /* SecondaryViews.swift */,
@@ -233,6 +236,7 @@
 				9EF6949C12F5DFC3173C98CE /* AppStore.swift in Sources */,
 				7F41B341D99E38A04D047E7D /* Authentication.swift in Sources */,
 				598AF216C11195D5A5072224 /* EntryEditor.swift in Sources */,
+				00B7067482423FB58C459CEA /* LayoutCheckedText.swift in Sources */,
 				C70D4EC4276438E85636DE24 /* RootView.swift in Sources */,
 				EF914E5CDABADD43F6D9D135 /* SecondaryViews.swift in Sources */,
 				259AD5AD43EAFB21CE9E7247 /* TracyApp.swift in Sources */,

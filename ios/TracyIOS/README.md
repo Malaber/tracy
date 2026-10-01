@@ -125,9 +125,15 @@ and fresh light/dark app launches. Demo mode does not start network monitoring o
 Accessibility audits run once, without retries or ignored findings. PR and main device matrices
 remain enabled. Hosted runner and Apple service availability are outside test control.
 
-Each accessibility category (contrast, hit regions, descriptions, clipping, and traits) has
-its own light and dark test and fresh app launch. This avoids submitting five categories
-under one audit-service deadline and makes any service failure attributable to one check.
+Each Apple accessibility category (contrast, hit regions, descriptions, and traits) has
+its own light and dark test and fresh app launch. Clipping uses measured SwiftUI text
+layout instead: each instrumented Today label must have enough height for its full text
+at the allocated width. A deliberately truncated fixture must fail that measurement.
+This avoids the Apple text-clipping service timeout seen on hosted iPads even with matching
+Xcode/runtime builds. Measurements cover app-owned Today labels, not system navigation/tab
+chrome; they are not a replacement for manual accessibility review. Diagnostics are active
+only in DEBUG launches with `--ui-layout-checks` and do not alter production accessibility
+values. The remaining audits run without instrumentation.
 Screenshots use screen capture before auditing, with no app-hierarchy query in audit logging.
 
 CI uses the `xcode-27` runner image and downloads the exact iOS runtime build with
@@ -136,5 +142,8 @@ The shared `IOS_RUNTIME_BUILD=23C52` value controls both download and verificati
 `26.2` as the build selector: Apple's catalog may resolve that version to a different build
 (for example 23C54), even though both runtimes report iOS 26.2.
 Setup checks exact Xcode and simulator build identifiers before running tests, matching the
-local validation environment. A missing/mismatched build fails setup instead of silently
+local validation environment. For local CI reproduction, create a fresh simulator with
+that runtime and pass its ID to `inv check-ios-ui --destination='platform=iOS Simulator,id=…'`,
+matching CI's isolated installation of the unsigned app/test runner.
+A missing/mismatched build fails setup instead of silently
 running another toolchain. The hosted machine's hardware and macOS may still differ.

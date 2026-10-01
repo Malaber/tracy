@@ -25,7 +25,7 @@ final class TracyUITests: XCTestCase {
 
     @MainActor
     func testTodayLightClipping() throws {
-        try auditToday(appearance: "light", category: .textClipped, name: "Clipping")
+        verifyTodayLayout(appearance: "light")
     }
 
     @MainActor
@@ -50,12 +50,54 @@ final class TracyUITests: XCTestCase {
 
     @MainActor
     func testTodayDarkClipping() throws {
-        try auditToday(appearance: "dark", category: .textClipped, name: "Clipping")
+        verifyTodayLayout(appearance: "dark")
     }
 
     @MainActor
     func testTodayDarkTraits() throws {
         try auditToday(appearance: "dark", category: .trait, name: "Traits")
+    }
+
+    @MainActor
+    func testClippingMeasurementRejectsTruncation() {
+        let app = XCUIApplication()
+        app.launchArguments = testArguments + ["--ui-layout-checks", "--ui-clipping-negative-control"]
+        app.launch()
+        defer { app.terminate() }
+        let text = app.descendants(matching: .any).matching(identifier: "layout.negative").firstMatch
+        XCTAssertTrue(text.waitForExistence(timeout: 15))
+        let clipped = NSPredicate(format: "value BEGINSWITH %@", "clipped:")
+        expectation(for: clipped, evaluatedWith: text)
+        waitForExpectations(timeout: 5)
+    }
+
+    @MainActor
+    private func verifyTodayLayout(appearance: String) {
+        let app = XCUIApplication()
+        app.launchArguments = testArguments + ["--ui-layout-checks", "-appearance", appearance]
+        app.launch()
+        defer { app.terminate() }
+        for key in [
+            "date", "headline", "action", "section", "label.Check-in", "value.Check-in",
+            "label.Check-out", "value.Check-out", "label.Breaks", "value.Breaks", "edit", "review",
+        ] {
+            // Buttons retain their existing identifiers and inherit their label value.
+            let identifier = key == "action" ? "quickAction" : key == "edit" ? "editToday" : "layout.\(key)"
+            let text = app.descendants(matching: .any).matching(identifier: identifier).firstMatch
+            for _ in 0..<6 {
+                if text.exists { break }
+                app.swipeUp()
+            }
+            guard text.waitForExistence(timeout: 5) else {
+                XCTFail("Missing measured label: \(key). \(app.debugDescription)")
+                return
+            }
+            XCTAssertEqual(text.value as? String, "fits", "\(key): \(text.debugDescription)")
+        }
+        let screenshot = XCTAttachment(screenshot: XCUIScreen.main.screenshot())
+        screenshot.name = "Today-layout-\(appearance)"
+        screenshot.lifetime = .keepAlways
+        add(screenshot)
     }
 
     @MainActor
