@@ -77,18 +77,29 @@ struct TodayView: View {
     var body: some View {
         NavigationStack {
             List {
+                #if DEBUG
+                    if ProcessInfo.processInfo.arguments.contains("--ui-clipping-negative-control") {
+                        LayoutCheckedText(
+                            "Deliberately clipped text proves measurement detects truncation", key: "negative"
+                        )
+                        .lineLimit(1).frame(width: 40)
+                    }
+                #endif
                 Section {
                     VStack(alignment: .leading, spacing: 14) {
-                        Text(Clock.title(store.today))
+                        LayoutCheckedText(Clock.title(store.today), key: "date")
                             .font(.subheadline).foregroundStyle(.primary)
-                        Text(headline).font(.largeTitle.bold()).accessibilityAddTraits(.isHeader)
+                        LayoutCheckedText(headline, key: "headline").font(.largeTitle.bold())
+                            .accessibilityAddTraits(.isHeader)
                             .accessibilityHint(subtitle)
                         if entry.checkIn == nil || entry.checkOut == nil {
                             Button {
                                 store.quickAction(checkOut: entry.checkIn != nil)
                             } label: {
-                                Text(entry.checkIn == nil ? "Check in now" : "Check out now")
-                                    .font(.headline).frame(maxWidth: .infinity).padding(.vertical, 8)
+                                LayoutCheckedText(
+                                    entry.checkIn == nil ? "Check in now" : "Check out now", key: "action"
+                                )
+                                .font(.headline).frame(maxWidth: .infinity).padding(.vertical, 8)
                             }
                             .modifier(PrimaryActionStyle())
                             .accessibilityIdentifier("quickAction")
@@ -109,10 +120,14 @@ struct TodayView: View {
                         }
                     }
                     if !entry.notes.isEmpty { Text(entry.notes) }
-                    Button("Edit today’s entry") { editing = entry }
-                        .accessibilityIdentifier("editToday")
+                    Button {
+                        editing = entry
+                    } label: {
+                        LayoutCheckedText("Edit today’s entry", key: "edit")
+                    }
+                    .accessibilityIdentifier("editToday")
                 } header: {
-                    Text("Your day").foregroundStyle(Color(uiColor: .label))
+                    LayoutCheckedText("Your day", key: "section").foregroundStyle(Color(uiColor: .label))
                 }
                 if let remote = store.conflict(store.today) {
                     Section {
@@ -134,7 +149,7 @@ struct TodayView: View {
                         NavigationLink {
                             RecentDaysView()
                         } label: {
-                            Text("\(attention.count) recent days need a look")
+                            LayoutCheckedText("\(attention.count) recent days need a look", key: "review")
                         }
                     }
                 }
@@ -147,8 +162,10 @@ struct TodayView: View {
     }
 
     private func dayValue(_ label: String, value: String) -> some View {
-        LabeledContent(label) {
-            Text(value).foregroundStyle(.primary)
+        LabeledContent {
+            LayoutCheckedText(value, key: "value.\(label)").foregroundStyle(.primary)
+        } label: {
+            LayoutCheckedText(label, key: "label.\(label)")
         }
     }
 
