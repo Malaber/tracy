@@ -130,7 +130,11 @@ its own light and dark test and fresh app launch. This avoids submitting five ca
 under one audit-service deadline and makes any service failure attributable to one check.
 Screenshots use screen capture before auditing, with no app-hierarchy query in audit logging.
 
-CI uses the `xcode-27` runner image and downloads iOS 26.2 with Xcode's platform installer.
+CI uses the `xcode-27` runner image and downloads the exact iOS runtime build with
+`xcodebuild -downloadPlatform iOS -buildVersion "$IOS_RUNTIME_BUILD" -architectureVariant arm64`.
+The shared `IOS_RUNTIME_BUILD=23C52` value controls both download and verification. Do not pass
+`26.2` as the build selector: Apple's catalog may resolve that version to a different build
+(for example 23C54), even though both runtimes report iOS 26.2.
 Setup checks exact Xcode and simulator build identifiers before running tests, matching the
 local validation environment. A missing/mismatched build fails setup instead of silently
 running another toolchain. The hosted machine's hardware and macOS may still differ.
