@@ -73,3 +73,29 @@ No passwords or email delivery are required.
 on quick time entry, reviewing recent days, and durable offline entry with automatic retry and
 explicit conflict resolution. It supports system/light/dark appearance and native Liquid Glass
 on iOS 26+. Bundle ID and App Store Connect SKU: `de.malaber.tracy`.
+
+### App Store screenshots
+
+Every GitHub release receives `tracy-app-store-<version>.zip` after the native
+screenshot job succeeds. Unzip it and upload the PNGs from `en-US/iphone-6.5`
+(1284 × 2778) and `en-US/ipad-13` (2064 × 2752) to the corresponding App Store
+Connect display slots. Each folder contains Today, entry editing, recent-day
+review, offline saving, and dark-mode screenshots. They show the actual app with
+synthetic local data; no production account is used. `manifest.json` records the
+release version, source commit, dimensions, and checksums.
+
+To generate the same files locally with Xcode 27.0 (27A266a), XcodeGen, and the
+iOS 26.2 (23C52) simulator runtime installed:
+
+```sh
+.codex/setup.sh --ios
+.venv/bin/pip install --retries 0 Pillow==12.1.1
+.venv/bin/inv capture-ios-screenshots
+```
+
+Output is under `e2e-artifacts/app-store/`. Captures run once on fresh isolated
+simulators; no retries or image resizing. The separate marketing test scheme
+keeps capture work out of the regular accessibility suite. Pull requests validate
+capture and publish downloadable workflow artifacts; releases additionally attach
+the ZIP to the exact release tag. A failed capture fails its job and publishes no
+partial screenshot archive. App Store uploads remain manual.

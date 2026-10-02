@@ -61,7 +61,24 @@ targets:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: de.malaber.tracy.uitests
         GENERATE_INFOPLIST_FILE: YES
+  TracyMarketingTests:
+    type: bundle.ui-testing
+    platform: iOS
+    deploymentTarget: '17.0'
+    sources: [MarketingTests]
+    dependencies:
+      - target: Tracy
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: de.malaber.tracy.marketingtests
+        GENERATE_INFOPLIST_FILE: YES
 schemes:
+  TracyMarketing:
+    build:
+      targets:
+        Tracy: all
+    test:
+      targets: [TracyMarketingTests]
   Tracy:
     build:
       targets:
