@@ -1,0 +1,12 @@
+{% extends "auth_base.html" %}
+{% block title %}Add a passkey · {{ app_name }}{% endblock %}
+{% block content %}
+{% if valid %}
+{% from "fastpasskey/add_link.html" import passkey_add_link with context %}
+{{ passkey_add_link(token, email, display_name) }}
+<p>After enrollment, open Tracy Time Tracking and choose “Sign in with passkey” using the key you just saved.</p>
+{% else %}
+<h1>This passkey link is unavailable</h1>
+<p>It may have expired, been used, or been revoked. Ask the administrator for a new link.</p>
+{% endif %}
+{% endblock %}

@@ -18,6 +18,7 @@
     {% if user %}
     <div class="account-actions">
       <a class="secondary-button header-link" href="/">Tracker</a>
+      {% if user.is_admin %}<a class="secondary-button header-link" href="/admin">Admin</a>{% endif %}
       <form method="post" action="/logout">
         <button class="secondary-button" type="submit">Sign out</button>
       </form>

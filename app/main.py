@@ -13,6 +13,7 @@ from app.api.v1.routes import router as api_router
 from app.core.config import settings
 from app.core.database import run_migrations
 from app.web.routes import router as web_router
+from app.web.admin import router as admin_router
 
 logger = logging.getLogger(__name__)
 
@@ -40,6 +41,7 @@ def create_app(*, with_lifespan: bool = True) -> FastAPI:
     application.include_router(mobile_auth_router, prefix="/api/v1")
     application.include_router(api_router, prefix="/api/v1")
     application.include_router(web_router)
+    application.include_router(admin_router)
     application.mount("/static", StaticFiles(directory="app/web/static"), name="static")
 
     @application.get("/health")
