@@ -206,15 +206,19 @@ async function main() {
     log("Admin creates review account and one-time passkey links");
     // Server operator bootstrap, against this task's disposable database only.
     execFileSync(process.env.E2E_PYTHON, ["-m", "app.services.admin_access", "e2e@example.com"], { env: process.env });
-    await page.goto(new URL("/admin", baseUrl).toString());
-    await page.getByLabel("Email address", { exact: true }).fill("apple-review@example.com");
-    await page.getByLabel("Display name", { exact: true }).fill("Apple Review");
+    await page.goto(new URL("/admin/user/list", baseUrl).toString());
+    await page.getByRole("link", { name: /New Account/ }).click();
+    await page.getByLabel("Email", { exact: true }).fill("apple-review@example.com");
+    await page.getByLabel("Display Name", { exact: true }).fill("Apple Review");
     await Promise.all([
-      page.waitForURL(new URL("/admin", baseUrl).toString()),
+      page.waitForURL(new URL("/admin/user/list", baseUrl).toString()),
       page.getByRole("button", { name: "Create account", exact: true }).click(),
     ]);
-    await page.getByRole("heading", { name: "Apple Review", exact: true }).waitFor();
-    await page.getByRole("button", { name: "Create passkey link for Apple Review", exact: true }).click();
+    const reviewRow = page.locator("tbody tr", { hasText: "apple-review@example.com" });
+    await reviewRow.waitFor();
+    const detailsURL = await reviewRow.locator('a[href*="/details/"]').getAttribute("href");
+    await page.goto(new URL(detailsURL, baseUrl).toString());
+    await page.getByRole("button", { name: "Create passkey link", exact: true }).click();
     const firstLink = await page.locator("#generated-link").inputValue();
     const reviewerContext = await browser.newContext();
     const reviewerPage = await reviewerContext.newPage();
@@ -226,15 +230,15 @@ async function main() {
       reviewerPage.waitForURL(new URL("/", baseUrl).toString()),
       reviewerPage.getByRole("button", { name: "Create passkey", exact: true }).click(),
     ]);
-    assert.equal((await reviewerContext.request.get(new URL("/admin", baseUrl).toString())).status(), 403);
+    assert.equal((await reviewerContext.request.get(new URL("/admin/user/list", baseUrl).toString())).status(), 403);
     const preparedEntry = new URL("/api/v1/entries/2026-01-06", baseUrl).toString();
     assert.equal((await reviewerContext.request.put(preparedEntry, {
       data: { check_in: "08:00", check_out: "17:00", notes: "Prepared review data" },
     })).status(), 200);
     await reviewerContext.request.post(new URL("/logout", baseUrl).toString());
     assert.equal((await reviewerContext.request.get(firstLink)).status(), 404);
-    await page.goto(new URL("/admin", baseUrl).toString());
-    await page.getByRole("button", { name: "Create passkey link for Apple Review", exact: true }).click();
+    await page.goto(new URL(detailsURL, baseUrl).toString());
+    await page.getByRole("button", { name: "Create passkey link", exact: true }).click();
     const appleLink = await page.locator("#generated-link").inputValue();
     await reviewerKey.replace();
     await reviewerPage.goto(appleLink);
@@ -266,11 +270,17 @@ async function main() {
       headers: { Authorization: `Bearer ${(await reviewExchange.json()).access_token}` },
     });
     assert.equal((await reviewNativeEntry.json()).notes, "Prepared review data");
-    await page.goto(new URL("/admin", baseUrl).toString());
-    await page.getByRole("button", { name: "Create passkey link for Apple Review", exact: true }).click();
+    await page.goto(new URL(detailsURL, baseUrl).toString());
+    await page.getByRole("button", { name: "Create passkey link", exact: true }).click();
     const revokedLink = await page.locator("#generated-link").inputValue();
-    await page.getByRole("button", { name: /^Revoke link/ }).click();
+    const linkID = new URLSearchParams(new URL(revokedLink).hash.slice(1)).get("identifier");
+    assert.match(linkID, /^[0-9a-f-]{36}$/);
+    await page.goto(new URL(`/admin/passkey-add-link/list?search=${linkID}`, baseUrl).toString());
+    assert.equal(await page.locator("tbody tr").count(), 1);
+    await page.locator('tbody a[href*="/details/"]').click();
+    await page.getByRole("button", { name: "Revoke link", exact: true }).click();
     assert.equal((await reviewerContext.request.get(revokedLink)).status(), 404);
+    await page.goto(new URL("/admin/user/list?search=apple-review", baseUrl).toString());
     await page.screenshot({ path: path.join(artifactDir, "admin-review-account.png"), fullPage: true });
     await page.setViewportSize({ width: 390, height: 844 });
     assert(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth), "Admin must fit mobile viewport");

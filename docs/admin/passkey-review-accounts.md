@@ -20,8 +20,8 @@ account's administrator status; issuing links requires a session-bound form toke
 
 ## Prepare Apple's review account
 
-1. In `/admin`, create a dedicated non-admin account, with an email you control.
-2. Generate a passkey link for that account. The default expiry is 24 hours; choose up to
+1. In `/admin`, select **Accounts → New Account** and create a dedicated non-admin account, with an email you control.
+2. Open that account’s details (eye icon) and generate a passkey link. The default expiry is 24 hours; choose up to
    720 hours (30 days) if needed for review scheduling. The full URL is displayed only once.
 3. Open this first link in a separate browser profile and register your preparation passkey.
    Populate the account normally with useful recent entries, breaks, notes, and days off.
@@ -55,12 +55,24 @@ Issuing a link does not delete existing keys, revoke sessions, or send email.
 Treat enrollment URLs like credentials: anyone holding a valid link can access that account.
 The database stores only a SHA-256 hash of a random 256-bit token. Consumption and key creation
 are one database transaction. Expired, revoked, used, or inactive-account links cannot enroll.
-Use **Revoke** in `/admin` to cancel a pending link. Issuer, creation time, expiry, and final
+Open **Passkey links**, find the record, open its details, and select **Revoke link** to cancel a pending link. Issuer, creation time, expiry, and final
 state remain visible; raw URLs cannot be retrieved again. Avoid storing enrollment paths in
 reverse-proxy/access logs. Enrollment/admin pages disable caching and referrer forwarding.
+
+## Search, pagination, and link identification
+
+The admin uses SQLAdmin, as Planini does. Accounts support email/name search and sorting.
+Both account and passkey-link tables show 25 rows by default, with 50/100-row options.
+Account details link to that account’s paginated enrollment history instead of loading it inline.
+
+New URLs include `#identifier=<full-link-UUID>`. Copy the entire URL when sharing it.
+Paste that UUID into the **Passkey links** search to locate its record; the same identifier
+appears in the list and details. The fragment is for identification only, is not sent to
+the server by browsers, and cannot grant access without the secret token in the URL path.
+Existing URLs without a fragment remain valid. Token hashes are not exposed in admin tables.
 
 ## Release version
 
 `RELEASE_MINIMUM` sets this feature release to **0.2.0**. CI and untagged native builds use
 that floor alongside existing Git tags. Once v0.2.0 exists, the usual patch sequence resumes
-at 0.2.1; native builds on a release tag always use that tag's version.
+at 0.2.1 (this SQLAdmin update); native builds on a release tag always use that tag's version.

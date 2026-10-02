@@ -1,0 +1,27 @@
+{% extends "sqladmin/details.html" %}
+{% block content %}
+{{ super() }}
+<div class="col-12 mt-3"><div class="card">
+  <div class="card-header"><h3 class="card-title">Additional passkey for {{ model.display_name }}</h3></div>
+  <div class="card-body">
+    <p>Existing passkeys and data stay unchanged. Links work once, until their expiry.</p>
+    {% if error %}<div class="alert alert-danger" role="alert">{{ error }}</div>{% endif %}
+    {% if link_url %}
+    <div class="alert alert-success">
+      <label for="generated-link" class="form-label">Enrollment link — copy now; shown only once</label>
+      <input id="generated-link" class="form-control" type="text" readonly value="{{ link_url }}" autocomplete="off">
+      <p class="mt-2 mb-0">Anyone with this link can access this account. The #identifier identifies its admin record.</p>
+    </div>
+    {% endif %}
+    {% if model.is_active %}
+    <form method="post" action="{{ url_for('admin:view-user-generate_link', pk=model.id) }}">
+      <input type="hidden" name="csrf" value="{{ request.session.admin_csrf }}">
+      <label for="hours" class="form-label">Valid for (hours, 1–720)</label>
+      <input id="hours" class="form-control mb-3" type="number" name="hours" min="1" max="720" value="24" required>
+      <button class="btn btn-primary" type="submit">Create passkey link</button>
+    </form>
+    {% else %}<p>This account is inactive.</p>{% endif %}
+    <a class="btn mt-3" href="{{ url_for('admin:list', identity='passkey-add-link').include_query_params(search=model.id|string) }}">View this account’s passkey links</a>
+  </div>
+</div></div>
+{% endblock %}

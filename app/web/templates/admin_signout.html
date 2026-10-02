@@ -1,0 +1,9 @@
+{% extends "auth_base.html" %}
+{% block title %}Sign out · {{ app_name }}{% endblock %}
+{% block content %}
+<h1>Sign out of Tracy?</h1>
+<form method="post" action="/logout">
+  <button class="primary-button" type="submit">Sign out</button>
+  <a class="secondary-button header-link" href="/admin/user/list">Back to administration</a>
+</form>
+{% endblock %}
