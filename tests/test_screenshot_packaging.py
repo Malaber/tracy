@@ -43,9 +43,10 @@ def test_package_requires_full_set_and_removes_alpha(tmp_path):
         assert len(entry["sha256"]) == 64
 
 
-def test_package_rejects_wrong_dimensions(tmp_path):
+@pytest.mark.parametrize("expected", [(16, 32), (16, 8)])
+def test_package_rejects_wrong_dimensions(tmp_path, expected):
     with pytest.raises(ValueError, match="expected"):
-        package_device(captures(tmp_path), tmp_path / "ready", (16, 32))
+        package_device(captures(tmp_path), tmp_path / "ready", expected)
 
 
 @pytest.mark.parametrize("problem", ["missing", "duplicate", "failed"])

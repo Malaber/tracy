@@ -93,9 +93,11 @@ iOS 26.2 (23C52) simulator runtime installed:
 .venv/bin/inv capture-ios-screenshots
 ```
 
-Output is under `e2e-artifacts/app-store/`. Captures run once on fresh isolated
-simulators; no retries or image resizing. The separate marketing test scheme
-keeps capture work out of the regular accessibility suite. Pull requests validate
+Output is under `e2e-artifacts/app-store/`. The runner builds before simulator boot,
+then captures run once on fresh portrait simulators using `test-without-building`.
+No device-rotation RPC, retries, or image resizing; packaging verifies portrait
+dimensions. The separate marketing test scheme keeps capture work out of the
+regular accessibility suite. Pull requests validate
 capture and publish downloadable workflow artifacts; releases additionally attach
 the ZIP to the exact release tag. A failed capture fails its job and publishes no
 partial screenshot archive. App Store uploads remain manual.

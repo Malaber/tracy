@@ -4,7 +4,8 @@ final class MarketingScreenshots: XCTestCase {
     @MainActor
     func testCapture() {
         continueAfterFailure = false
-        XCUIDevice.shared.orientation = .portrait
+        // The capture task creates fresh portrait simulators. Avoid a device-orientation
+        // RPC before launching the app: it can hang in XCTest on CI.
         let app = XCUIApplication()
         func launch(_ appearance: String) {
             app.launchArguments = [

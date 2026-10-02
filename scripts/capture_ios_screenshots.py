@@ -31,6 +31,31 @@ def run(*args):
     return result.stdout.strip()
 
 
+def xcodebuild(log_path, *arguments):
+    """Keep full build logs and surface the failure context in the Actions log."""
+    with log_path.open("w") as log:
+        result = subprocess.run(
+            [
+                "xcodebuild",
+                "-project",
+                str(IOS / "TracyApp.xcodeproj"),
+                "-scheme",
+                "TracyMarketing",
+                "-derivedDataPath",
+                str(IOS / "DerivedDataMarketing"),
+                "-parallel-testing-enabled",
+                "NO",
+                "CODE_SIGNING_ALLOWED=NO",
+                *arguments,
+            ],
+            stdout=log,
+            stderr=subprocess.STDOUT,
+        )
+    if result.returncode:
+        print("\n".join(log_path.read_text().splitlines()[-80:]), file=sys.stderr, flush=True)
+        result.check_returncode()
+
+
 def package_device(export, destination, dimensions):
     """Accept exactly one successful capture of every expected scene, at native resolution."""
     destination.mkdir(parents=True)
@@ -73,6 +98,15 @@ def main():
         raise SystemExit("Screenshot captures require iOS 26.2 build 23C52")
     output = ROOT / "e2e-artifacts/app-store"
     output.mkdir(parents=True, exist_ok=True)
+    # Compile before booting CoreSimulator, as in the regular native CI job.
+    # This avoids concurrent compiler and simulator startup on the smaller CI host.
+    print("Building screenshot runner", flush=True)
+    xcodebuild(
+        output / "build-for-testing.log",
+        "-destination",
+        "generic/platform=iOS Simulator",
+        "build-for-testing",
+    )
     manifest = {
         "version": args.version,
         "commit": run("git", "rev-parse", "HEAD"),
@@ -127,29 +161,14 @@ def main():
                     "--batteryLevel",
                     "100",
                 )
-                with (output / f"{family}-build.log").open("w") as log:
-                    subprocess.run(
-                        [
-                            "xcodebuild",
-                            "-project",
-                            str(IOS / "TracyApp.xcodeproj"),
-                            "-scheme",
-                            "TracyMarketing",
-                            "-destination",
-                            f"platform=iOS Simulator,id={identifier}",
-                            "-derivedDataPath",
-                            str(IOS / "DerivedDataMarketing"),
-                            "-resultBundlePath",
-                            str(result),
-                            "-parallel-testing-enabled",
-                            "NO",
-                            "CODE_SIGNING_ALLOWED=NO",
-                            "test",
-                        ],
-                        check=True,
-                        stdout=log,
-                        stderr=subprocess.STDOUT,
-                    )
+                xcodebuild(
+                    output / f"{family}-build.log",
+                    "-destination",
+                    f"platform=iOS Simulator,id={identifier}",
+                    "-resultBundlePath",
+                    str(result),
+                    "test-without-building",
+                )
                 export = stage / f"{family}-attachments"
                 run(
                     "xcrun",
