@@ -40,7 +40,8 @@ Run all checks with:
 Every pushed branch runs separate formatting, lint, Python, and JavaScript jobs. Successful commits
 publish an immutable multi-architecture image as `ghcr.io/malaber/tracy:sha-<commit>`.
 
-Successful `main` CI runs create the next patch release, publish matching version and `latest`
+Successful `main` CI runs create the next patch release (or the `RELEASE_MINIMUM`
+version when a feature release raises that floor), publish matching version and `latest`
 container tags, and create a Git tag and GitHub Release. Deploy the current release with:
 
 ```bash
@@ -59,6 +60,12 @@ The working-day calculation includes national holidays and whole-state public ho
 selected German federal state. Municipal holidays such as Augsburg Peace Festival, Bavaria's
 municipality-dependent Assumption Day, and local Corpus Christi rules in Saxony/Thuringia are not
 treated as state-wide days off.
+
+## Administration and review accounts
+
+[Manual passkey enrollment and Apple review setup](docs/admin/passkey-review-accounts.md)
+explains administrator bootstrap, account creation, and expiring one-time passkey links.
+No passwords or email delivery are required.
 
 ## Native iOS app
 

@@ -14,6 +14,17 @@ templates = Jinja2Templates(directory="app/web/templates")
 install_fastpasskey_templates(templates.env)
 
 TRANSLATIONS = {
+    "auth.passkey_add.title": "Add a passkey",
+    "auth.passkey_add.one_time_link": "One-time enrollment for {email}.",
+    "auth.passkey_add.register_another_title": "Access your Tracy account",
+    "auth.passkey_add.register_another_body": (
+        "Save a passkey for {display_name} on your device or in your password manager."
+    ),
+    "auth.passkey_add.create_another_title": "Your own secure sign-in",
+    "auth.passkey_add.create_another_body": (
+        "Existing passkeys and account data stay unchanged. No password needed."
+    ),
+    "auth.passkey_add.create_additional_button": "Create passkey",
     "auth.login.title": "Your working time, protected by a passkey",
     "auth.login.intro": "Sign in securely without a password, or create your Tracy account.",
     "auth.login.capabilities_link": "How passkeys work",
@@ -125,4 +136,28 @@ async def app_information(request: Request) -> Response:
     page = request.url.path.strip("/")
     return templates.TemplateResponse(
         request=request, name=f"public_{page}.html", context=_context(request)
+    )
+
+
+@router.get("/passkey-add/{token}", response_class=HTMLResponse)
+async def passkey_add(token: str, request: Request, db: AsyncSession = Depends(get_db)) -> Response:
+    from app.services.passkey_repository import TracyPasskeyRepository
+
+    target = await TracyPasskeyRepository(db).add_link_user(token)
+    return templates.TemplateResponse(
+        request=request,
+        name="passkey_add.html",
+        context=_context(
+            request,
+            valid=target is not None,
+            token=token,
+            email=target.email if target else "",
+            display_name=target.display_name if target else "",
+        ),
+        status_code=200 if target else 404,
+        headers={
+            "Cache-Control": "no-store",
+            "Referrer-Policy": "no-referrer",
+            "X-Robots-Tag": "noindex, nofollow",
+        },
     )

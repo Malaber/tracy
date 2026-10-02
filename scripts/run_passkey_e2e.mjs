@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { execFileSync } from "node:child_process";
 import { createHash, randomBytes, randomUUID } from "node:crypto";
 import fsSync from "node:fs";
 import fs from "node:fs/promises";
@@ -202,6 +203,82 @@ async function main() {
     assert(!(await remainingRow.innerText()).includes("{date}"));
     assert(!(await page.locator("[data-passkey-name-form]").isVisible()));
     await page.screenshot({ path: path.join(artifactDir, "passkey-flow.png"), fullPage: true });
+    log("Admin creates review account and one-time passkey links");
+    // Server operator bootstrap, against this task's disposable database only.
+    execFileSync(process.env.E2E_PYTHON, ["-m", "app.services.admin_access", "e2e@example.com"], { env: process.env });
+    await page.goto(new URL("/admin", baseUrl).toString());
+    await page.getByLabel("Email address", { exact: true }).fill("apple-review@example.com");
+    await page.getByLabel("Display name", { exact: true }).fill("Apple Review");
+    await Promise.all([
+      page.waitForURL(new URL("/admin", baseUrl).toString()),
+      page.getByRole("button", { name: "Create account", exact: true }).click(),
+    ]);
+    await page.getByRole("heading", { name: "Apple Review", exact: true }).waitFor();
+    await page.getByRole("button", { name: "Create passkey link for Apple Review", exact: true }).click();
+    const firstLink = await page.locator("#generated-link").inputValue();
+    const reviewerContext = await browser.newContext();
+    const reviewerPage = await reviewerContext.newPage();
+    const reviewerKey = await createVirtualAuthenticator(reviewerContext, reviewerPage, {
+      ctap2Version: "ctap2_1", transport: "usb",
+    });
+    await reviewerPage.goto(firstLink);
+    await Promise.all([
+      reviewerPage.waitForURL(new URL("/", baseUrl).toString()),
+      reviewerPage.getByRole("button", { name: "Create passkey", exact: true }).click(),
+    ]);
+    assert.equal((await reviewerContext.request.get(new URL("/admin", baseUrl).toString())).status(), 403);
+    const preparedEntry = new URL("/api/v1/entries/2026-01-06", baseUrl).toString();
+    assert.equal((await reviewerContext.request.put(preparedEntry, {
+      data: { check_in: "08:00", check_out: "17:00", notes: "Prepared review data" },
+    })).status(), 200);
+    await reviewerContext.request.post(new URL("/logout", baseUrl).toString());
+    assert.equal((await reviewerContext.request.get(firstLink)).status(), 404);
+    await page.goto(new URL("/admin", baseUrl).toString());
+    await page.getByRole("button", { name: "Create passkey link for Apple Review", exact: true }).click();
+    const appleLink = await page.locator("#generated-link").inputValue();
+    await reviewerKey.replace();
+    await reviewerPage.goto(appleLink);
+    await Promise.all([
+      reviewerPage.waitForURL(new URL("/", baseUrl).toString()),
+      reviewerPage.getByRole("button", { name: "Create passkey", exact: true }).click(),
+    ]);
+    assert.equal((await (await reviewerContext.request.get(preparedEntry)).json()).notes, "Prepared review data");
+    await reviewerPage.goto(new URL("/security", baseUrl).toString());
+    await reviewerPage.locator(".passkey-row").nth(1).waitFor();
+    assert.equal(await reviewerPage.locator(".passkey-row").count(), 2);
+    await reviewerContext.request.post(new URL("/logout", baseUrl).toString());
+    await reviewerPage.goto(new URL("/login", baseUrl).toString());
+    await Promise.all([
+      reviewerPage.waitForURL(new URL("/", baseUrl).toString()),
+      reviewerPage.getByRole("button", { name: "Sign in with passkey", exact: true }).click(),
+    ]);
+    const reviewVerifier = randomBytes(32).toString("base64url");
+    const reviewAuthorization = await reviewerContext.request.get(new URL("/api/v1/auth/mobile/authorize", baseUrl).toString(), {
+      params: { state: randomBytes(32).toString("base64url"), code_challenge: createHash("sha256").update(reviewVerifier).digest("base64url") }, maxRedirects: 0,
+    });
+    assert.equal(reviewAuthorization.status(), 303);
+    const reviewCode = new URL(reviewAuthorization.headers().location).searchParams.get("code");
+    const reviewExchange = await reviewerContext.request.post(new URL("/api/v1/auth/mobile/token", baseUrl).toString(), {
+      data: { code: reviewCode, code_verifier: reviewVerifier },
+    });
+    assert.equal(reviewExchange.status(), 200);
+    const reviewNativeEntry = await reviewerContext.request.get(preparedEntry, {
+      headers: { Authorization: `Bearer ${(await reviewExchange.json()).access_token}` },
+    });
+    assert.equal((await reviewNativeEntry.json()).notes, "Prepared review data");
+    await page.goto(new URL("/admin", baseUrl).toString());
+    await page.getByRole("button", { name: "Create passkey link for Apple Review", exact: true }).click();
+    const revokedLink = await page.locator("#generated-link").inputValue();
+    await page.getByRole("button", { name: /^Revoke link/ }).click();
+    assert.equal((await reviewerContext.request.get(revokedLink)).status(), 404);
+    await page.screenshot({ path: path.join(artifactDir, "admin-review-account.png"), fullPage: true });
+    await page.setViewportSize({ width: 390, height: 844 });
+    assert(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth), "Admin must fit mobile viewport");
+    await page.screenshot({ path: path.join(artifactDir, "admin-mobile.png"), fullPage: true });
+    await page.setViewportSize({ width: 1280, height: 960 });
+    await reviewerKey.dispose();
+    await reviewerContext.close();
+
     log("Checking public App Store pages without a session");
     const publicContext = await browser.newContext();
     const publicPage = await publicContext.newPage();
@@ -252,7 +329,7 @@ async function main() {
     await native.close();
     await fs.writeFile(
       path.join(artifactDir, "summary.md"),
-      "Passkey registration, login, data persistence, public store pages, native PKCE, idempotent retry, conflict protection, and account deletion passed.\n",
+      "Admin-created review account, one-use enrollment, revocation, prepared data, passkey registration, login, data persistence, public store pages, native PKCE, idempotent retry, conflict protection, and account deletion passed.\n",
     );
     log("Passkey flow passed");
   } finally {

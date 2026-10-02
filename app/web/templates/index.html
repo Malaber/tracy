@@ -26,7 +26,8 @@
       <div class="account-actions">
         <button id="settingsButton" class="icon-button settings-button" type="button" aria-label="Open settings">⚙</button>
         <a class="secondary-button header-link" href="/security">Passkeys</a>
-        <form method="post" action="/logout">
+        {% if user.is_admin %}<a class="secondary-button header-link" href="/admin">Admin</a>{% endif %}
+      <form method="post" action="/logout">
           <button class="secondary-button" type="submit">Sign out</button>
         </form>
       </div>

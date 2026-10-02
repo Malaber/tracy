@@ -7,7 +7,7 @@ from uuid import UUID, uuid4
 from zoneinfo import ZoneInfo
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, Response, status
-from sqlalchemy import delete, select
+from sqlalchemy import delete, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm.exc import StaleDataError
@@ -21,6 +21,7 @@ from app.models import (
     DayOff,
     MobileAuthorization,
     Passkey,
+    PasskeyAddLink,
     Preferences,
     User,
     WorkEntry,
@@ -557,6 +558,10 @@ async def delete_account(
     await db.execute(delete(BreakEntry).where(BreakEntry.work_entry_id.in_(entry_ids)))
     for model in (WorkEntry, DayOff, Preferences, MobileAuthorization, AuthSession, Passkey):
         await db.execute(delete(model).where(model.user_id == user.id))
+    await db.execute(delete(PasskeyAddLink).where(PasskeyAddLink.user_id == user.id))
+    await db.execute(
+        update(PasskeyAddLink).where(PasskeyAddLink.created_by == user.id).values(created_by=None)
+    )
     await db.execute(delete(User).where(User.id == user.id))
     await db.commit()
     return Response(status_code=204)

@@ -69,8 +69,14 @@ def _next_rc_version(version: str, run_number: int, tags: list[str]) -> str:
         rc_number += 1
 
 
-def _compute_version_values(ref_name: str, run_number: int, tags: list[str]) -> dict[str, str]:
+def _compute_version_values(
+    ref_name: str, run_number: int, tags: list[str], minimum: str = "0.1.0"
+) -> dict[str, str]:
     base_version = _next_stable_version(_latest_stable_version_from_tags(tags), tags)
+    if not re.fullmatch(r"\d+\.\d+\.\d+", minimum):
+        raise ValueError("Invalid release minimum")
+    if tuple(map(int, minimum.split("."))) > tuple(map(int, base_version.split("."))):
+        base_version = minimum
     release_version = (
         base_version if ref_name == "main" else _next_rc_version(base_version, run_number, tags)
     )
@@ -184,6 +190,7 @@ def browser_e2e(
             "APP_BASE_URL": f"http://localhost:{port}",
             "DATABASE_URL": f"sqlite+aiosqlite:///{database_file}",
             "PREVIEW_ARTIFACT_DIR": str(artifacts),
+            "E2E_PYTHON": sys.executable,
             "PREVIEW_BASE_URL": f"http://localhost:{port}",
             "SECRET_KEY": "tracy-passkey-e2e-secret-32-bytes",
             "SECURE_COOKIES": "false",
@@ -263,6 +270,7 @@ def compute_version(_, ref_name="", run_number=""):
         resolved_ref_name,
         int(resolved_run_number),
         _git_lines("tag", "--list", "v*"),
+        minimum=(ROOT / "RELEASE_MINIMUM").read_text().strip(),
     )
     _write_github_output(values)
 
@@ -280,7 +288,9 @@ def _ios_release_version(tags: list[str], head_tags: list[str]) -> str:
     stable = [tag for tag in head_tags if STABLE_TAG_PATTERN.fullmatch(tag)]
     if stable:
         return _latest_stable_version_from_tags(stable)
-    return _compute_version_values("main", 1, tags)["base_version"]
+    return _compute_version_values(
+        "main", 1, tags, minimum=(ROOT / "RELEASE_MINIMUM").read_text().strip()
+    )["base_version"]
 
 
 def _current_ios_version() -> str:
@@ -337,3 +347,10 @@ def upload_ios_testflight(c, build_number="1"):
         f"{shlex.quote(str(IOS_ROOT / 'Scripts' / 'upload_testflight.sh'))} "
         f"{shlex.quote(version)} {shlex.quote(str(build_number))}"
     )
+
+
+@task
+def set_admin(c, email, revoke=False):
+    """Grant/revoke admin rights for an existing account (server operator only)."""
+    flag = " --revoke" if revoke else ""
+    c.run(f"{_bin('python')} -m app.services.admin_access {shlex.quote(email)}{flag}")

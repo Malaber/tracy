@@ -1,0 +1,53 @@
+{% extends "auth_base.html" %}
+{% block title %}Administration · {{ app_name }}{% endblock %}
+{% block content %}
+<h1>Administration</h1>
+<p>Create review accounts and manage passkey enrollment. Links add a key without removing existing keys.</p>
+{% if error %}<p role="alert" class="auth-banner auth-banner-error">{{ error }}</p>{% endif %}
+{% if link_url %}
+<section class="card admin-card" aria-labelledby="link-heading">
+  <h2 id="link-heading">Passkey link created</h2>
+  <p>Copy this link now; it is shown only once. Anyone holding it can add a passkey and access this account. It works once, until its expiry.</p>
+  <label for="generated-link">Enrollment link</label>
+  <input id="generated-link" type="text" readonly value="{{ link_url }}" autocomplete="off">
+</section>
+{% endif %}
+<section class="card admin-card" aria-labelledby="create-heading">
+  <h2 id="create-heading">Create account</h2>
+  <p>The account starts empty, without a passkey or administrator rights. Create a link below to enroll its first key.</p>
+  <form action="/admin/users" method="post" class="admin-form">
+    <input type="hidden" name="csrf" value="{{ csrf }}">
+    <label>Email address <input type="email" name="email" required maxlength="255" autocomplete="off"></label>
+    <label>Display name <input name="display_name" required maxlength="120" autocomplete="off"></label>
+    <button class="primary-button" type="submit">Create account</button>
+  </form>
+</section>
+<h2>Accounts</h2>
+{% for account in users %}
+<section class="card admin-card" aria-labelledby="user-{{ account.id }}">
+  <h3 id="user-{{ account.id }}">{{ account.display_name }}</h3>
+  <p>{{ account.email }} · {{ account.passkeys|length }} passkeys · {{ 'Active' if account.is_active else 'Inactive' }}{% if account.is_admin %} · Administrator{% endif %}</p>
+  {% if account.is_active %}
+  <form action="/admin/users/{{ account.id }}/links" method="post" class="admin-form">
+    <input type="hidden" name="csrf" value="{{ csrf }}">
+    <label>Valid for (hours, 1–720) <input type="number" name="hours" min="1" max="720" value="24" required></label>
+    <button class="primary-button" type="submit">Create passkey link for {{ account.display_name }}</button>
+  </form>
+  {% endif %}
+  <ul class="admin-links">
+  {% for link in links if link.user_id == account.id %}
+    <li>
+      <span>Link {{ (link.id|string)[:8] }} · Created {{ link.created_at.strftime('%Y-%m-%d %H:%M') }} UTC · Issued by {{ issuers.get(link.created_by, "Deleted administrator") }} · Expires {{ link.expires_at.strftime('%Y-%m-%d %H:%M') }} UTC ·
+      {% if link.used_at %}Used{% elif link.revoked_at %}Revoked{% elif link.expires_at.replace(tzinfo=None) <= now %}Expired{% else %}Ready{% endif %}</span>
+      {% if not link.used_at and not link.revoked_at and link.expires_at.replace(tzinfo=None) > now %}
+      <form action="/admin/links/{{ link.id }}/revoke" method="post">
+        <input type="hidden" name="csrf" value="{{ csrf }}">
+        <button class="secondary-button" type="submit" aria-label="Revoke link {{ (link.id|string)[:8] }}">Revoke</button>
+      </form>
+      {% endif %}
+    </li>
+  {% else %}<li>No enrollment links.</li>{% endfor %}
+  </ul>
+</section>
+{% endfor %}
+{% endblock %}

@@ -66,7 +66,24 @@ def test_deployment_defaults_to_latest_ghcr_image():
 
 
 def test_ios_version_shares_release_tag_sequence():
-    assert tasks._ios_release_version(["v0.1.6"], []) == "0.1.7"
+    assert tasks._ios_release_version(["v0.1.6"], []) == "0.2.0"
     assert tasks._ios_release_version(["v0.1.6", "v0.1.7"], ["v0.1.7"]) == "0.1.7"
     assert tasks._ios_release_version(["v0.2.0"], ["v0.2.0"]) == "0.2.0"
     assert tasks._ios_release_version(["v0.2.0"], []) == "0.2.1"
+
+
+def test_explicit_minor_release_floor_then_patch_sequence():
+    assert (
+        tasks._compute_version_values("main", 1, ["v0.1.10"], minimum="0.2.0")["release_version"]
+        == "0.2.0"
+    )
+    assert (
+        tasks._compute_version_values("main", 1, ["v0.2.0"], minimum="0.2.0")["release_version"]
+        == "0.2.1"
+    )
+    assert (
+        tasks._compute_version_values("feature", 2, ["v0.1.10"], minimum="0.2.0")["release_version"]
+        == "0.2.0-rc.2"
+    )
+    with pytest.raises(ValueError):
+        tasks._compute_version_values("main", 1, [], minimum="broken")

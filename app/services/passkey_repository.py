@@ -10,7 +10,8 @@ from sqlalchemy.orm import selectinload
 
 from app.core.database import get_db
 from app.core.security import create_access_token
-from app.models import Passkey, Preferences, User, WorkEntry
+from app.models import Passkey, PasskeyAddLink, Preferences, User, WorkEntry
+from app.services.passkey_links import active_link_query
 from app.services.auth_sessions import create_auth_session, revoke_auth_session
 
 
@@ -107,6 +108,37 @@ class TracyPasskeyRepository:
         await self.db.commit()
         await self.db.refresh(passkey)
         return passkey
+
+    async def add_link_user(self, token: str) -> User | None:
+        link = (await self.db.execute(active_link_query(token))).scalar_one_or_none()
+        return await self.user_by_id(link.user_id) if link else None
+
+    async def complete_add_link(
+        self, *, token: str, user_id: UUID, name: str, credential: PasskeyCredential
+    ) -> User | None:
+        # Claim and enrollment are one transaction: concurrent verification can only
+        # consume the link once, and a failed credential insert leaves it usable.
+        claimed = await self.db.execute(
+            update(PasskeyAddLink)
+            .where(
+                PasskeyAddLink.id.in_(
+                    active_link_query(token).with_only_columns(PasskeyAddLink.id)
+                ),
+                PasskeyAddLink.user_id == user_id,
+            )
+            .values(used_at=datetime.now(UTC))
+            .returning(PasskeyAddLink.id)
+        )
+        if claimed.scalar_one_or_none() is None:
+            await self.db.rollback()
+            return None
+        self.db.add(_new_passkey(user_id=user_id, name=name, credential=credential))
+        try:
+            await self.db.commit()
+        except IntegrityError:
+            await self.db.rollback()
+            return None
+        return await self.user_by_id(user_id)
 
     async def record_passkey_use(self, passkey: Passkey, *, new_sign_count: int) -> None:
         passkey.sign_count = new_sign_count
