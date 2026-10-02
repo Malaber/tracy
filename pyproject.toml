@@ -20,6 +20,7 @@ dependencies = [
   "python-jose[cryptography]>=3.5.0",
   "jinja2>=3.1.6",
   "python-multipart>=0.0.20",
+  "sqladmin==0.32.0",
   "itsdangerous>=2.2.0",
   "fastpasskey @ https://github.com/Malaber/python-libs/releases/download/fastpasskey-v0.2.6/fastpasskey-0.2.6-py3-none-any.whl#sha256=b66a362eb0805860692e1d01bc51db16c8a832a684453a8c825bfe9788d0d19e",
 ]

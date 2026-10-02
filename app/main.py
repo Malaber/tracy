@@ -13,7 +13,7 @@ from app.api.v1.routes import router as api_router
 from app.core.config import settings
 from app.core.database import run_migrations
 from app.web.routes import router as web_router
-from app.web.admin import router as admin_router
+from app.web.admin import configure_admin
 
 logger = logging.getLogger(__name__)
 
@@ -25,7 +25,7 @@ async def lifespan(_: FastAPI):
     yield
 
 
-def create_app(*, with_lifespan: bool = True) -> FastAPI:
+def create_app(*, with_lifespan: bool = True, admin_session_maker=None) -> FastAPI:
     application = FastAPI(
         title=settings.app_name,
         lifespan=lifespan if with_lifespan else None,
@@ -41,7 +41,7 @@ def create_app(*, with_lifespan: bool = True) -> FastAPI:
     application.include_router(mobile_auth_router, prefix="/api/v1")
     application.include_router(api_router, prefix="/api/v1")
     application.include_router(web_router)
-    application.include_router(admin_router)
+    configure_admin(application, admin_session_maker)
     application.mount("/static", StaticFiles(directory="app/web/static"), name="static")
 
     @application.get("/health")

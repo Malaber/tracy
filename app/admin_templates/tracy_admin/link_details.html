@@ -1,0 +1,14 @@
+{% extends "sqladmin/details.html" %}
+{% block content %}
+{{ super() }}
+<div class="col-12 mt-3"><div class="card"><div class="card-body">
+  <p>The link identifier matches #identifier in the copied enrollment URL. The secret URL cannot be retrieved again.</p>
+  {% if not model.used_at and not model.revoked_at %}
+  <form method="post" action="{{ url_for('admin:view-passkey-add-link-revoke_link', pk=model.id) }}">
+    <input type="hidden" name="csrf" value="{{ request.session.admin_csrf }}">
+    <button class="btn btn-danger" type="submit">Revoke link</button>
+  </form>
+  {% endif %}
+  <a class="btn mt-3" href="{{ url_for('admin:details', identity='user', pk=model.user_id) }}">Account details</a>
+</div></div></div>
+{% endblock %}
