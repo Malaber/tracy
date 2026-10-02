@@ -8,6 +8,7 @@ from pathlib import Path
 import subprocess
 import shutil
 import tempfile
+import sys
 import zipfile
 
 from PIL import Image
@@ -23,7 +24,11 @@ SCENES = ("01-today", "02-entry", "03-recent-days", "04-offline", "05-dark")
 
 
 def run(*args):
-    return subprocess.run(args, check=True, text=True, capture_output=True).stdout.strip()
+    result = subprocess.run(args, text=True, capture_output=True)
+    if result.returncode:
+        print(result.stdout + result.stderr, file=sys.stderr, flush=True)
+        result.check_returncode()
+    return result.stdout.strip()
 
 
 def package_device(export, destination, dimensions):
@@ -109,7 +114,8 @@ def main():
                     identifier,
                     "override",
                     "--time",
-                    "2026-09-30T09:41:00Z",
+                    # simctl rejects ISO timestamps without fractional seconds.
+                    "2026-09-30T09:41:00.000+00:00",
                     "--dataNetwork",
                     "wifi",
                     "--wifiMode",
