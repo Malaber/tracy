@@ -114,7 +114,7 @@ final class TracyUITests: XCTestCase {
         // Reveal the lower rows before auditing: the floating tab bar can visually
         // cover a row that XCTest still reports as present in the hierarchy.
         let start = app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.65))
-        let end = app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.50))
+        let end = app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.59))
         start.press(forDuration: 0.05, thenDragTo: end)
         let screenshot = XCTAttachment(screenshot: XCUIScreen.main.screenshot())
         screenshot.name = "Today-\(appearance)-\(name)"

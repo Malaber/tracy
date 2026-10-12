@@ -698,7 +698,6 @@ function shiftStatistics(direction) {
 async function initialize() {
   [state.meta, state.preferences] = await Promise.all([api("/meta"), api("/preferences")]);
   state.currentDate = serverNow().date;
-  state.todayEntry = await api(`/entries/${serverNow().date}`);
   byId("federalState").innerHTML = Object.entries(state.meta.federal_states)
     .map(([code, name]) => `<option value="${code}">${escapeHtml(name)}</option>`).join("");
   document.querySelectorAll("[data-view]").forEach((button) => button.addEventListener("click", () => switchView(button.dataset.view)));

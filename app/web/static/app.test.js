@@ -179,6 +179,7 @@ test("tracker updates live estimates every minute without saving checkout", asyn
     assert.equal(element("dayProgress").style.backgroundImage, "none");
     assert.equal(element("checkOut").value, "");
     assert.ok(requests.every(request => !request.options.method));
+    assert.equal(requests.filter(request => request.url.includes("/entries/")).length, 1);
   } finally {
     for (const [key, value] of Object.entries(originals)) {
       if (value === undefined) delete globalThis[key]; else globalThis[key] = value;
