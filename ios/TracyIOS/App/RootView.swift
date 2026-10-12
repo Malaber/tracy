@@ -86,19 +86,16 @@ struct TodayView: View {
                     }
                 #endif
                 Section {
-                    VStack(alignment: .leading, spacing: 14) {
+                    VStack(alignment: .leading, spacing: 8) {
                         LayoutCheckedText(Clock.title(store.today), key: "date")
                             .font(.subheadline).foregroundStyle(.primary)
                         LayoutCheckedText(headline, key: "headline").font(.largeTitle.bold())
                             .accessibilityAddTraits(.isHeader)
                             .accessibilityHint(subtitle)
-                        if store.signOffEstimate != nil {
-                            Text("If you check out now · includes breaks").font(.subheadline)
-                        }
                         let minutes = store.signOffEstimate?.exactMinutes ?? entry.exactMinutes ?? 0
                         let progress = min(1, max(0, Double(minutes) / 480))
                         ProgressView(value: progress) {
-                            Text("\(Clock.duration(minutes)) / 8h")
+                            Text(store.signOffEstimate != nil ? "If you check out now · 8h goal" : "8h working-day goal")
                         }
                         .tint(Color(hue: (35 + 105 * progress) / 360, saturation: 0.75, brightness: 0.75))
                         .accessibilityLabel("8-hour working day")
@@ -116,7 +113,7 @@ struct TodayView: View {
                             .accessibilityIdentifier("quickAction")
                         }
                     }
-                    .padding(.vertical, 12)
+                    .padding(.vertical, 8)
                 }
                 Section {
                     dayValue("Check-in", value: entry.checkIn ?? "Not entered")
