@@ -16,12 +16,20 @@
 		7F41B341D99E38A04D047E7D /* Authentication.swift in Sources */ = {isa = PBXBuildFile; fileRef = 15B1267AAD0731C3290E34C0 /* Authentication.swift */; };
 		9EF6949C12F5DFC3173C98CE /* AppStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = FC46A697DE72816095362688 /* AppStore.swift */; };
 		C70D4EC4276438E85636DE24 /* RootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C33D5B25355F68F0BC190404 /* RootView.swift */; };
+		D4D75DEBCCFE382190236258 /* MarketingScreenshots.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9DB381EE7738E6B22966F13A /* MarketingScreenshots.swift */; };
 		EF914E5CDABADD43F6D9D135 /* SecondaryViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = 93589588D442ED5BA4AD47F8 /* SecondaryViews.swift */; };
 		F72E57B0F03B6809F8CFE404 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = 8C8A6075C9BAFC929A7CBE99 /* PrivacyInfo.xcprivacy */; };
 		FDADDD6443037E65B8EBFC73 /* TracyCore in Frameworks */ = {isa = PBXBuildFile; productRef = 8447051C5C5751E171D0D42E /* TracyCore */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
+		18EE672C030A9BA0554064B3 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 88B9117A093265D25039BB14 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = B1767D988016EAF6D37BC0D1;
+			remoteInfo = Tracy;
+		};
 		E200F0F181D464075A6BB70C /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
 			containerPortal = 88B9117A093265D25039BB14 /* Project object */;
@@ -33,6 +41,7 @@
 
 /* Begin PBXFileReference section */
 		02B0D9A5212BEB67E006CBB1 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
+		082C2227B9BC59E237B5EBFC /* TracyMarketingTests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = TracyMarketingTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		10D5BE15721AC2D1F2D61B97 /* TracyApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TracyApp.swift; sourceTree = "<group>"; };
 		1173BF00F583B4CD2C1E0F26 /* TracyUITests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = TracyUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		1548A00CD3A3757D68A4365D /* Tracy.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = Tracy.app; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -44,6 +53,7 @@
 		8C8A6075C9BAFC929A7CBE99 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
 		8CE178044A01404A4969F5BE /* TracyUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TracyUITests.swift; sourceTree = "<group>"; };
 		93589588D442ED5BA4AD47F8 /* SecondaryViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SecondaryViews.swift; sourceTree = "<group>"; };
+		9DB381EE7738E6B22966F13A /* MarketingScreenshots.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MarketingScreenshots.swift; sourceTree = "<group>"; };
 		C33D5B25355F68F0BC190404 /* RootView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RootView.swift; sourceTree = "<group>"; };
 		C91E53FABCF034848B321B58 /* TracyIOS */ = {isa = PBXFileReference; lastKnownFileType = folder; name = TracyIOS; path = .; sourceTree = SOURCE_ROOT; };
 		C983F527A8764079A8A2EAFF /* EntryEditor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EntryEditor.swift; sourceTree = "<group>"; };
@@ -62,10 +72,19 @@
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
+		13CF0C98D786FBE14E5C567E /* MarketingTests */ = {
+			isa = PBXGroup;
+			children = (
+				9DB381EE7738E6B22966F13A /* MarketingScreenshots.swift */,
+			);
+			path = MarketingTests;
+			sourceTree = "<group>";
+		};
 		45195F303DEEFDE2B5A3A32C /* Products */ = {
 			isa = PBXGroup;
 			children = (
 				1548A00CD3A3757D68A4365D /* Tracy.app */,
+				082C2227B9BC59E237B5EBFC /* TracyMarketingTests.xctest */,
 				1173BF00F583B4CD2C1E0F26 /* TracyUITests.xctest */,
 			);
 			name = Products;
@@ -94,6 +113,7 @@
 				763F0A35622A95792A596D6C /* AppIcon.icon */,
 				6D5E4CBED1AD90C16D148AE0 /* Assets.xcassets */,
 				E1F4712FF85C30D5E08B0C65 /* App */,
+				13CF0C98D786FBE14E5C567E /* MarketingTests */,
 				FC9F8184C6CD80F89C381C0D /* Packages */,
 				613B04391E42D7134D1382E5 /* TracyIOS */,
 				ACE6695AA0A9D1028F36DB74 /* UITests */,
@@ -128,6 +148,24 @@
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
+		4344BCD0799FCBAA3510CAE2 /* TracyMarketingTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = FEC04D38FD4BAAF028040A93 /* Build configuration list for PBXNativeTarget "TracyMarketingTests" */;
+			buildPhases = (
+				6ACCB02267F577DC0518718A /* Sources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				B969ABFF4E234B6AF72D16AA /* PBXTargetDependency */,
+			);
+			name = TracyMarketingTests;
+			packageProductDependencies = (
+			);
+			productName = TracyMarketingTests;
+			productReference = 082C2227B9BC59E237B5EBFC /* TracyMarketingTests.xctest */;
+			productType = "com.apple.product-type.bundle.ui-testing";
+		};
 		B1767D988016EAF6D37BC0D1 /* Tracy */ = {
 			isa = PBXNativeTarget;
 			buildConfigurationList = 9A7EB9B5C10CF4BA4F05D107 /* Build configuration list for PBXNativeTarget "Tracy" */;
@@ -175,6 +213,10 @@
 				BuildIndependentTargetsInParallel = YES;
 				LastUpgradeCheck = 1430;
 				TargetAttributes = {
+					4344BCD0799FCBAA3510CAE2 = {
+						DevelopmentTeam = VWKG94374J;
+						TestTargetID = B1767D988016EAF6D37BC0D1;
+					};
 					B1767D988016EAF6D37BC0D1 = {
 						DevelopmentTeam = VWKG94374J;
 					};
@@ -203,6 +245,7 @@
 			targets = (
 				B1767D988016EAF6D37BC0D1 /* Tracy */,
 				F58E05B7B74F25CF12CFE9F3 /* TracyUITests */,
+				4344BCD0799FCBAA3510CAE2 /* TracyMarketingTests */,
 			);
 		};
 /* End PBXProject section */
@@ -229,6 +272,14 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		6ACCB02267F577DC0518718A /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				D4D75DEBCCFE382190236258 /* MarketingScreenshots.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		A59D7EEEE500955E42F444E5 /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -246,6 +297,11 @@
 /* End PBXSourcesBuildPhase section */
 
 /* Begin PBXTargetDependency section */
+		B969ABFF4E234B6AF72D16AA /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = B1767D988016EAF6D37BC0D1 /* Tracy */;
+			targetProxy = 18EE672C030A9BA0554064B3 /* PBXContainerItemProxy */;
+		};
 		E62FBB3939EE07F494EC68E0 /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;
 			target = B1767D988016EAF6D37BC0D1 /* Tracy */;
@@ -266,6 +322,24 @@
 					"@loader_path/Frameworks",
 				);
 				PRODUCT_BUNDLE_IDENTIFIER = de.malaber.tracy.uitests;
+				SDKROOT = iphoneos;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_TARGET_NAME = Tracy;
+			};
+			name = Debug;
+		};
+		1FE1900D6820F16F9112B969 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = de.malaber.tracy.marketingtests;
 				SDKROOT = iphoneos;
 				TARGETED_DEVICE_FAMILY = "1,2";
 				TEST_TARGET_NAME = Tracy;
@@ -421,6 +495,24 @@
 			};
 			name = Release;
 		};
+		7006E09CCB6EEF2E11083F61 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = de.malaber.tracy.marketingtests;
+				SDKROOT = iphoneos;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_TARGET_NAME = Tracy;
+			};
+			name = Release;
+		};
 		E997F102863C51A03D7C29BA /* Release */ = {
 			isa = XCBuildConfiguration;
 			baseConfigurationReference = 680A97BF9EE954CEA485AD2A /* Version.xcconfig */;
@@ -495,6 +587,15 @@
 			buildConfigurations = (
 				256DBF115E825F4B00656661 /* Debug */,
 				E997F102863C51A03D7C29BA /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		FEC04D38FD4BAAF028040A93 /* Build configuration list for PBXNativeTarget "TracyMarketingTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				1FE1900D6820F16F9112B969 /* Debug */,
+				7006E09CCB6EEF2E11083F61 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Debug;

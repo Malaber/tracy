@@ -233,3 +233,28 @@ jobs:
           with urllib.request.urlopen(request) as response:
               print(f"production wake status={response.status}")
           PY
+
+  screenshots:
+    needs: [version, release]
+    permissions:
+      contents: read
+    uses: ./.github/workflows/app-store-screenshots.yml
+    with:
+      ref: ${{ needs.version.outputs.git_tag }}
+
+  screenshot-assets:
+    needs: [version, screenshots]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          name: tracy-app-store-screenshots
+          path: screenshots
+      - name: Attach screenshots to exact release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+          RELEASE_TAG: ${{ needs.version.outputs.git_tag }}
+        run: gh release upload "$RELEASE_TAG" screenshots/*.zip --clobber

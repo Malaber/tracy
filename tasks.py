@@ -123,17 +123,17 @@ def bootstrap_ci(c):
 
 @task
 def format(c):
-    c.run(f"{_bin('black')} app tests tasks.py")
+    c.run(f"{_bin('black')} app tests tasks.py scripts/*.py")
 
 
 @task
 def black_check(c):
-    c.run(f"{_bin('black')} --check app tests tasks.py")
+    c.run(f"{_bin('black')} --check app tests tasks.py scripts/*.py")
 
 
 @task
 def flake8_check(c):
-    c.run(f"{_bin('flake8')} app tests tasks.py")
+    c.run(f"{_bin('flake8')} app tests tasks.py scripts/*.py")
 
 
 @task
@@ -354,3 +354,12 @@ def set_admin(c, email, revoke=False):
     """Grant/revoke admin rights for an existing account (server operator only)."""
     flag = " --revoke" if revoke else ""
     c.run(f"{_bin('python')} -m app.services.admin_access {shlex.quote(email)}{flag}")
+
+
+@task(generate_ios_project)
+def capture_ios_screenshots(c):
+    """Capture and package App Store screenshots on isolated iPhone and iPad simulators."""
+    c.run(
+        f"{_bin('python')} scripts/capture_ios_screenshots.py "
+        f"--version {shlex.quote(_current_ios_version())}"
+    )

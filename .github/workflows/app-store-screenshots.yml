@@ -1,0 +1,51 @@
+name: App Store screenshots
+
+on:
+  workflow_call:
+    inputs:
+      ref:
+        type: string
+        required: true
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - 'ios/**'
+      - 'scripts/capture_ios_screenshots.py'
+      - 'tasks.py'
+      - '.github/workflows/app-store-screenshots.yml'
+      - '.github/workflows/release.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  screenshots:
+    runs-on: xcode-27
+    timeout-minutes: 45
+    env:
+      DEVELOPER_DIR: /Applications/Xcode_27.0.app/Contents/Developer
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.ref || github.sha }}
+          fetch-depth: 0
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.14'
+      - run: xcodebuild -downloadPlatform iOS -buildVersion 23C52 -architectureVariant arm64
+      - run: brew install xcodegen
+      - run: .codex/setup.sh --ios
+      - run: .venv/bin/pip install --retries 0 Pillow==12.1.1
+      - run: .venv/bin/inv capture-ios-screenshots
+      - uses: actions/upload-artifact@v7
+        with:
+          name: tracy-app-store-screenshots
+          path: e2e-artifacts/app-store/*.zip
+          if-no-files-found: error
+      - if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: screenshot-build-logs
+          path: |
+            e2e-artifacts/app-store/*.log
+            e2e-artifacts/app-store/tmp*/*.xcresult
