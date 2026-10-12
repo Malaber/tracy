@@ -111,6 +111,11 @@ final class TracyUITests: XCTestCase {
         // Application screenshots resolve an accessibility snapshot. After an audit the
         // hosted iPad service can stop answering those queries. Screen capture does not
         // query the app hierarchy; collect evidence before handing control to the audit.
+        // Reveal the lower rows before auditing: the floating tab bar can visually
+        // cover a row that XCTest still reports as present in the hierarchy.
+        let start = app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.65))
+        let end = app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.50))
+        start.press(forDuration: 0.05, thenDragTo: end)
         let screenshot = XCTAttachment(screenshot: XCUIScreen.main.screenshot())
         screenshot.name = "Today-\(appearance)-\(name)"
         screenshot.lifetime = .keepAlways
@@ -151,10 +156,18 @@ final class TracyUITests: XCTestCase {
         notes.typeText("Offline project notes")
         app.buttons["saveEntry"].tap()
         XCTAssertTrue(app.staticTexts["Offline project notes"].waitForExistence(timeout: 3))
+        for _ in 0..<6 {
+            if app.staticTexts["1 days waiting to sync"].exists { break }
+            app.swipeUp()
+        }
         XCTAssertTrue(app.staticTexts["1 days waiting to sync"].exists)
         app.terminate()
         app.launch()
         XCTAssertTrue(app.staticTexts["Offline project notes"].waitForExistence(timeout: 10))
+        for _ in 0..<6 {
+            if app.staticTexts["1 days waiting to sync"].exists { break }
+            app.swipeUp()
+        }
         XCTAssertTrue(app.staticTexts["1 days waiting to sync"].exists)
         app.buttons["Recent Days"].firstMatch.tap()
         XCTAssertTrue(app.switches["Needs attention only"].waitForExistence(timeout: 3))

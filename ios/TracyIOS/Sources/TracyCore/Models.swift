@@ -112,6 +112,41 @@ public struct EntryPayload: Codable, Equatable, Sendable {
     }
 }
 
+public struct SignOffEstimate: Equatable, Sendable {
+    public let exactMinutes: Int
+    public let billableMinutes: Int
+    public let breakMinutes: Int
+    public var progress: Double { min(1, max(0, Double(exactMinutes) / 480)) }
+
+    public static func project(_ entry: WorkEntry, now: Date, timezone: String, rounding: Int = 15) -> Self? {
+        guard entry.date == Clock.day(now, timezone: timezone), entry.checkOut == nil,
+            let start = entry.checkIn.flatMap(Clock.minutes) else { return nil }
+        let time = Clock.calendar(timezone: timezone).dateComponents([.hour, .minute], from: now)
+        let end = time.hour! * 60 + time.minute!
+        guard end >= start else { return nil }
+        if end == start { return Self(exactMinutes: 0, billableMinutes: 0, breakMinutes: 0) }
+        var payload = entry.payload
+        payload.checkOut = String(format: "%02d:%02d", time.hour!, time.minute!)
+        payload.checkOutNextDay = false
+        payload = payload.applyingDefaultBreak(previous: entry.payload)
+        guard payload.validationMessage == nil else { return nil }
+        let breaks = payload.breaks.reduce(0) { total, item in
+            if item.mode == "duration" { return total + (item.durationMinutes ?? 0) }
+            let from = Clock.minutes(item.start!)!
+            let to = Clock.minutes(item.end!)!
+            return total + to - from + (to < from ? 1440 : 0)
+        }
+        let exact = end - start - breaks
+        let increment = max(1, rounding)
+        return Self(exactMinutes: exact, billableMinutes: (exact + increment - 1) / increment * increment,
+                    breakMinutes: breaks)
+    }
+}
+
+public struct WorkPreferences: Decodable, Sendable {
+    public let roundingMinutes: Int
+}
+
 public struct DaySummary: Codable, Identifiable, Sendable {
     public let date: String
     public let weekday: String
@@ -120,9 +155,9 @@ public struct DaySummary: Codable, Identifiable, Sendable {
     public let isDayOff: Bool
     public let isWorkday: Bool
     public let expectedMinutes: Int
-    public let exactMinutes: Int
-    public let billableMinutes: Int
-    public let balanceMinutes: Int
+    public var exactMinutes: Int
+    public var billableMinutes: Int
+    public var balanceMinutes: Int
     public let status: String
     public let notes: String
     public var id: String { date }
@@ -148,16 +183,32 @@ public struct DaySummary: Codable, Identifiable, Sendable {
 
 public struct Statistics: Codable, Sendable {
     public struct Summary: Codable, Sendable {
-        public let exactMinutes: Int
-        public let billableMinutes: Int
+        public var exactMinutes: Int
+        public var billableMinutes: Int
         public let targetMinutes: Int
-        public let balanceMinutes: Int
+        public var balanceMinutes: Int
         public let completedDays: Int
     }
     public let start: String
     public let end: String
-    public let summary: Summary
-    public let days: [DaySummary]
+    public var summary: Summary
+    public var days: [DaySummary]
+}
+
+extension Statistics {
+    public func projecting(_ estimate: SignOffEstimate?, date: String) -> Self {
+        guard let estimate, let index = days.firstIndex(where: { $0.date == date }) else { return self }
+        var result = self
+        let exactDelta = estimate.exactMinutes - days[index].exactMinutes
+        let billableDelta = estimate.billableMinutes - days[index].billableMinutes
+        result.days[index].exactMinutes = estimate.exactMinutes
+        result.days[index].billableMinutes = estimate.billableMinutes
+        result.days[index].balanceMinutes += exactDelta
+        result.summary.exactMinutes += exactDelta
+        result.summary.billableMinutes += billableDelta
+        result.summary.balanceMinutes += exactDelta
+        return result
+    }
 }
 
 public struct ServerMeta: Decodable, Sendable {

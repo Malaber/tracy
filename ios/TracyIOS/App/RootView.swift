@@ -92,6 +92,17 @@ struct TodayView: View {
                         LayoutCheckedText(headline, key: "headline").font(.largeTitle.bold())
                             .accessibilityAddTraits(.isHeader)
                             .accessibilityHint(subtitle)
+                        if store.signOffEstimate != nil {
+                            Text("If you check out now · includes breaks").font(.subheadline)
+                        }
+                        let minutes = store.signOffEstimate?.exactMinutes ?? entry.exactMinutes ?? 0
+                        let progress = min(1, max(0, Double(minutes) / 480))
+                        ProgressView(value: progress) {
+                            Text("\(Clock.duration(minutes)) / 8h")
+                        }
+                        .tint(Color(hue: (35 + 105 * progress) / 360, saturation: 0.75, brightness: 0.75))
+                        .accessibilityLabel("8-hour working day")
+                        .accessibilityValue("\(Int(progress * 100)) percent")
                         if entry.checkIn == nil || entry.checkOut == nil {
                             Button {
                                 store.quickAction(checkOut: entry.checkIn != nil)
@@ -113,9 +124,9 @@ struct TodayView: View {
                         "Check-out",
                         value: (entry.checkOut ?? "Not entered")
                             + (entry.checkOutNextDay ? " · next day" : ""))
-                    if !store.isPending(store.today) {
-                        dayValue("Breaks", value: Clock.duration(entry.breakMinutes))
-                        if let billable = entry.billableMinutes {
+                    if store.signOffEstimate != nil || !store.isPending(store.today) {
+                        dayValue("Breaks", value: Clock.duration(store.signOffEstimate?.breakMinutes ?? entry.breakMinutes))
+                        if let billable = store.signOffEstimate?.billableMinutes ?? entry.billableMinutes {
                             dayValue("Billable", value: Clock.duration(billable))
                         }
                     }
@@ -123,7 +134,7 @@ struct TodayView: View {
                     Button {
                         editing = entry
                     } label: {
-                        LayoutCheckedText("Edit today’s entry", key: "edit")
+                        LayoutCheckedText("Edit today’s entry", key: "edit").foregroundStyle(Color(uiColor: .label))
                     }
                     .accessibilityIdentifier("editToday")
                 } header: {
@@ -140,6 +151,18 @@ struct TodayView: View {
                         }
                     }
                 }
+                if let savedWeek = store.snapshot.week,
+                    savedWeek.start <= store.today && store.today <= savedWeek.end {
+                    let week = savedWeek.projecting(store.signOffEstimate, date: store.today)
+                    Section("This week") {
+                        LabeledContent("Working time", value: Clock.duration(week.summary.exactMinutes))
+                        LabeledContent("Target", value: Clock.duration(week.summary.targetMinutes))
+                        LabeledContent("Balance", value: Clock.duration(week.summary.balanceMinutes))
+                        if store.signOffEstimate != nil {
+                            Text("Includes live sign-off estimate").font(.footnote).foregroundStyle(.secondary)
+                        }
+                    }
+                }
                 let attention =
                     store.snapshot.recent?.days.filter {
                         $0.needsAttention(today: store.today) && !store.isPending($0.date)
@@ -149,7 +172,7 @@ struct TodayView: View {
                         NavigationLink {
                             RecentDaysView()
                         } label: {
-                            LayoutCheckedText("\(attention.count) recent days need a look", key: "review")
+                            LayoutCheckedText("\(attention.count) recent days need a look", key: "review").foregroundStyle(Color(uiColor: .label))
                         }
                     }
                 }
@@ -170,6 +193,7 @@ struct TodayView: View {
     }
 
     private var headline: String {
+        if let estimate = store.signOffEstimate { return Clock.duration(estimate.exactMinutes) }
         if store.isPending(store.today) {
             return entry.checkOut == nil ? "Your day is underway" : "Your day, recorded"
         }

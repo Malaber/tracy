@@ -174,7 +174,11 @@ struct StatisticsView: View {
                         Button("Retry") { Task { await load() } }
                     }
                 }
-                if let statistics {
+                if let savedStatistics = statistics {
+                    let statistics = savedStatistics.projecting(store.signOffEstimate, date: store.today)
+                    if store.signOffEstimate != nil && statistics.days.contains(where: { $0.date == store.today }) {
+                        Text("Includes live sign-off estimate").font(.footnote)
+                    }
                     Section("\(Clock.title(statistics.start)) – \(Clock.title(statistics.end))") {
                         LabeledContent("Working time", value: Clock.duration(statistics.summary.exactMinutes))
                         LabeledContent(
@@ -202,7 +206,7 @@ struct StatisticsView: View {
                 }
                 if store.pendingCount > 0 {
                     Section {
-                        Label("Totals exclude entries waiting to sync.", systemImage: "icloud.and.arrow.up")
+                        Label("Saved totals exclude pending edits; live estimates include today’s check-in.", systemImage: "icloud.and.arrow.up")
                     }
                 }
                 Section {
