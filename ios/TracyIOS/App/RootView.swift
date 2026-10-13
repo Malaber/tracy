@@ -175,6 +175,7 @@ struct TodayView: View {
                 }
                 SyncStatus()
             }
+            .modifier(ReadableScrollEdge())
             .navigationTitle("Today")
             .refreshable { await store.refresh() }
             .sheet(item: $editing) { EntryEditor(entry: $0) }
@@ -206,11 +207,22 @@ struct TodayView: View {
     }
 }
 
+/// Keep readable rows above the tab bar outside its gradual fade.
+struct ReadableScrollEdge: ViewModifier {
+    @ViewBuilder func body(content: Content) -> some View {
+        if #available(iOS 26.0, *) {
+            content.scrollEdgeEffectStyle(.hard, for: .bottom)
+        } else {
+            content
+        }
+    }
+}
+
 struct PrimaryActionStyle: ViewModifier {
     @Environment(\.colorScheme) private var colorScheme
     @ViewBuilder func body(content: Content) -> some View {
         if #available(iOS 26.0, *) {
-            content.buttonStyle(.glassProminent).foregroundStyle(
+            content.buttonStyle(.borderedProminent).foregroundStyle(
                 colorScheme == .dark ? Color.black : Color.white)
         } else {
             content.buttonStyle(.borderedProminent)

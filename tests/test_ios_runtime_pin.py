@@ -30,5 +30,5 @@ def test_ci_download_requests_the_build_it_verifies(tmp_path):
     )
     arguments = capture.read_text().splitlines()
     requested = arguments[arguments.index("-buildVersion") + 1]
-    assert requested == build == "23C52"
-    assert requested != "26.2"  # Version aliases may resolve to 23C54 instead.
+    assert requested == build == "24A434"
+    assert requested != "27.0"  # Version aliases can select a different runtime build.
