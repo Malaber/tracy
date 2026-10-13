@@ -138,7 +138,9 @@ Screenshots use screen capture before auditing, with no app-hierarchy query in a
 
 CI uses the `xcode-27` runner image and downloads the exact iOS runtime build with
 `xcodebuild -downloadPlatform iOS -buildVersion "$IOS_RUNTIME_BUILD" -architectureVariant arm64`.
-The shared `IOS_RUNTIME_BUILD=24A434` value controls both download and verification. Do not pass
+The shared `IOS_RUNTIME_BUILD=24A434` value controls both download and verification.
+CI skips downloading when that exact runtime is already available, avoiding Xcode’s
+nonzero exit for an already downloaded runtime. Do not pass
 `27.0` as the build selector: Apple's catalog may resolve that version to a different build
 even when both runtimes report iOS 27.0.
 Setup checks exact Xcode and simulator build identifiers before running tests, matching the

@@ -38,7 +38,17 @@ jobs:
           xcodebuild -version
           test "$(xcodebuild -version)" = "$(printf 'Xcode 27.0\nBuild version 27A266a')"
       - name: Install matching simulator runtime
-        run: xcodebuild -downloadPlatform iOS -buildVersion "$IOS_RUNTIME_BUILD" -architectureVariant arm64
+        run: |
+          if ! xcrun simctl list runtimes --json | python3 -c '
+          import json, os, sys
+          expected = os.environ["IOS_RUNTIME_BUILD"]
+          installed = any(r["identifier"] == "com.apple.CoreSimulator.SimRuntime.iOS-27-0"
+                          and r["buildversion"] == expected and r["isAvailable"]
+                          for r in json.load(sys.stdin)["runtimes"])
+          sys.exit(0 if installed else 1)
+          '; then
+            xcodebuild -downloadPlatform iOS -buildVersion "$IOS_RUNTIME_BUILD" -architectureVariant arm64
+          fi
       - name: Verify matching simulator build
         run: |
           xcrun simctl list runtimes --json > /tmp/tracy-runtimes.json
