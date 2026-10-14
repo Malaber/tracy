@@ -116,6 +116,9 @@
               <p class="eyebrow">Today's result</p>
               <div id="billableHours" class="big-hours">—</div>
               <p class="big-hours-label">billable hours</p>
+              <p id="estimateLabel" hidden>If you check out now · automatic break when applicable</p>
+              <p id="dayProgressText">— / 8 h</p>
+              <div id="dayProgressTrack" class="progress-track" role="progressbar" aria-label="8-hour working day" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><span id="dayProgress"></span></div>
               <div class="summary-divider"></div>
               <dl class="summary-list">
                 <div><dt>Exact working time</dt><dd id="exactDuration">—</dd></div>
@@ -133,6 +136,7 @@
                 <span id="weekBalance" class="balance-badge">0 h</span>
               </div>
               <div class="progress-track"><span id="weekProgress"></span></div>
+              <p id="weekEstimate" hidden>Includes live sign-off estimate</p>
               <div id="recentDays" class="recent-days"></div>
             </section>
           </aside>
@@ -158,7 +162,8 @@
 
         <div class="stats-toolbar card">
           <button id="previousPeriod" class="icon-button" type="button" aria-label="Previous period">←</button>
-          <div><span>Selected period</span><strong id="statisticsRange">—</strong></div>
+          <div><span>Selected period</span><strong id="statisticsRange">—</strong>
+          <p id="statisticsEstimate" hidden>Includes live sign-off estimate. Exports contain saved time only.</p></div>
           <button id="nextPeriod" class="icon-button" type="button" aria-label="Next period">→</button>
         </div>
 

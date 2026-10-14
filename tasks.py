@@ -325,7 +325,7 @@ def build_ios_simulator(c):
 
 
 @task(generate_ios_project)
-def check_ios_ui(c, destination="platform=iOS Simulator,name=iPhone 17 Pro"):
+def check_ios_ui(c, destination="platform=iOS Simulator,name=iPhone 18 Pro,OS=27.0"):
     """Run native time-entry and accessibility smoke tests on an installed simulator."""
     c.run(
         f"xcodebuild -project {shlex.quote(str(IOS_ROOT / 'TracyApp.xcodeproj'))} "

@@ -16,7 +16,7 @@ From the repository root, run `.codex/setup.sh` first. Install Xcode 26 or newer
 .venv/bin/inv check-ios-package
 .venv/bin/inv generate-ios-project
 .venv/bin/inv build-ios-simulator
-.venv/bin/inv check-ios-ui --destination='platform=iOS Simulator,name=iPhone 17 Pro'
+.venv/bin/inv check-ios-ui --destination='platform=iOS Simulator,name=iPhone 18 Pro,OS=27.0'
 ```
 
 Open `ios/TracyIOS/TracyApp.xcodeproj` and select the **Tracy** scheme. The project is generated
@@ -119,7 +119,7 @@ The web E2E registers a real virtual passkey, exchanges a native PKCE token, ver
 retries and stale-write conflicts against the running backend, and deletes the account.
 
 Native CI uses `.codex/setup.sh --ios` to install only pinned Invoke, avoiding unrelated backend
-and Node downloads. Xcode 27.0 build 27A266a and iOS 26.2 build 23C52 are explicit; each job creates its own simulator.
+and Node downloads. Xcode 27.0 build 27A266a and iOS 27.0 build 24A434 are explicit; each job creates its own simulator.
 Tests use English/US locale, explicit text sizes, a fixed fixture clock, isolated journals,
 and fresh light/dark app launches. Demo mode does not start network monitoring or periodic refresh.
 Accessibility audits run once, without retries or ignored findings. PR and main device matrices
@@ -138,9 +138,11 @@ Screenshots use screen capture before auditing, with no app-hierarchy query in a
 
 CI uses the `xcode-27` runner image and downloads the exact iOS runtime build with
 `xcodebuild -downloadPlatform iOS -buildVersion "$IOS_RUNTIME_BUILD" -architectureVariant arm64`.
-The shared `IOS_RUNTIME_BUILD=23C52` value controls both download and verification. Do not pass
-`26.2` as the build selector: Apple's catalog may resolve that version to a different build
-(for example 23C54), even though both runtimes report iOS 26.2.
+The shared `IOS_RUNTIME_BUILD=24A434` value controls both download and verification.
+CI skips downloading when that exact runtime is already available, avoiding Xcode’s
+nonzero exit for an already downloaded runtime. Do not pass
+`27.0` as the build selector: Apple's catalog may resolve that version to a different build
+even when both runtimes report iOS 27.0.
 Setup checks exact Xcode and simulator build identifiers before running tests, matching the
 local validation environment. For local CI reproduction, create a fresh simulator with
 that runtime and pass its ID to `inv check-ios-ui --destination='platform=iOS Simulator,id=…'`,

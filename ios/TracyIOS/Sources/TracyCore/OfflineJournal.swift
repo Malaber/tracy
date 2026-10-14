@@ -14,7 +14,9 @@ public struct JournalSnapshot: Codable, Sendable {
     public var pending: [PendingEntry] = []
     public var timezone = "Europe/Berlin"
     public var recent: Statistics?
+    public var week: Statistics?
     public var lastSync: Date?
+    public var roundingMinutes: Int?
     public init() {}
 }
 
@@ -31,6 +33,18 @@ public final class OfflineJournal {
         } else {
             snapshot = JournalSnapshot()
         }
+    }
+
+    public func cacheWeek(_ statistics: Statistics) throws {
+        var next = snapshot
+        next.week = statistics
+        try commit(next)
+    }
+
+    public func cacheRounding(_ minutes: Int) throws {
+        var next = snapshot
+        next.roundingMinutes = minutes
+        try commit(next)
     }
 
     public func erase() throws {

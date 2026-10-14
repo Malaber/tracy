@@ -4,6 +4,9 @@ import test from "node:test";
 
 import {
   calculateDraft,
+  projectEntry,
+  projectStatistics,
+  dayProgress,
   formatDuration,
   localISODate,
   needsDefaultBreak,
@@ -97,4 +100,90 @@ test("validateDateRange accepts one or multiple dates and rejects invalid ranges
   assert.throws(() => validateDateRange("", "2026-07-20"), /both a start and end/);
   assert.throws(() => validateDateRange("2026-02-30", "2026-03-02"), /valid calendar/);
   assert.throws(() => validateDateRange("2026-07-20", "2026-07-18"), /on or after/);
+});
+
+test("live sign-off applies default breaks, rounding and date guards without mutation", () => {
+  const entry = { date: "2026-10-12", check_in: "08:00", check_out: null, breaks: [] };
+  const now = clock => ({ date: entry.date, clock });
+  assert.deepEqual(projectEntry(entry, now("08:00")), { exact: 0, billable: 0, breakMinutes: 0 });
+  assert.equal(projectEntry(entry, now("12:30")).exact, 270);
+  assert.deepEqual(projectEntry(entry, now("12:31")), { exact: 241, billable: 255, breakMinutes: 30 });
+  assert.equal(projectEntry(entry, now("16:31"), 1).billable, 481);
+  assert.equal(projectEntry(entry, now("07:59")), null);
+  assert.equal(projectEntry(entry, { date: "2026-10-13", clock: "09:00" }), null);
+  assert.equal(projectEntry({ ...entry, check_out: "17:00" }, now("18:00")), null);
+  assert.equal(projectEntry({ ...entry, breaks: [{ mode: "duration", duration_minutes: 45 }] }, now("16:00")).exact, 435);
+  assert.equal(entry.check_out, null);
+  assert.deepEqual(entry.breaks, []);
+  assert.equal(dayProgress(480).percent, 100);
+  assert.equal(dayProgress(600).percent, 100);
+  assert.equal(dayProgress(240).percent, 50);
+  assert.notEqual(dayProgress(240).color, dayProgress(480).color);
+});
+
+test("live statistics replace day contribution without double counting or completing day", () => {
+  const data = { summary: { exact_minutes: 480, billable_minutes: 480, balance_minutes: -1920, target_minutes: 2400, completed_days: 1 }, days: [{ date: "2026-10-12", exact_minutes: 0, billable_minutes: 0, balance_minutes: -480 }], weeks: [{ week_start: "2026-10-12", exact_minutes: 480, billable_minutes: 480 }] };
+  const entry = { date: "2026-10-12" };
+  const estimate = { exact: 241, billable: 255 };
+  const result = projectStatistics(data, entry, estimate);
+  assert.equal(result.summary.exact_minutes, 721);
+  assert.equal(result.summary.billable_minutes, 735);
+  assert.equal(result.summary.balance_minutes, -1679);
+  assert.equal(result.summary.completed_days, 1);
+  assert.equal(result.weeks[0].exact_minutes, 721);
+  assert.equal(result.days[0].status, "in_progress");
+  assert.deepEqual(projectStatistics(result, entry, estimate), result);
+  assert.equal(data.summary.exact_minutes, 480);
+  assert.equal(projectStatistics(data, { date: "2025-01-01" }, estimate), data);
+});
+
+test("tracker updates live estimates every minute without saving checkout", async () => {
+  const { JSDOM } = await import("jsdom");
+  const html = await fs.readFile(new URL("../templates/index.html", import.meta.url), "utf8");
+  const dom = new JSDOM(html, { url: "https://tracy.example" });
+  const originals = Object.fromEntries(["document", "location", "fetch", "Date", "setInterval"].map(key => [key, globalThis[key]]));
+  let now = "2026-10-12T12:31:00Z";
+  let tick;
+  const requests = [];
+  const entry = { date: "2026-10-12", saved: true, check_in: "08:00", check_out: null, breaks: [], status: "in_progress" };
+  const stats = { summary: { exact_minutes: 0, billable_minutes: 0, target_minutes: 2400, balance_minutes: -2400, completion_percent: 0 }, days: [{ date: entry.date, is_workday: true, status: "in_progress", exact_minutes: 0, billable_minutes: 0, balance_minutes: -480 }] };
+  try {
+    globalThis.document = dom.window.document;
+    globalThis.location = dom.window.location;
+    globalThis.Date = class extends originals.Date {
+      constructor(...args) { super(...(args.length ? args : [now])); }
+    };
+    globalThis.setInterval = callback => { tick = callback; };
+    globalThis.fetch = async (url, options) => {
+      requests.push({ url, options });
+      const data = url.endsWith("/meta") ? { timezone: "UTC", federal_states: {} }
+        : url.endsWith("/preferences") ? { rounding_minutes: 15 }
+        : url.includes("/statistics?") ? stats : entry;
+      return { ok: true, json: async () => structuredClone(data) };
+    };
+    await import(`./app.js?ui-test=${originals.Date.now()}`);
+    for (let i = 0; i < 100 && !tick; i++) await new Promise(resolve => setImmediate(resolve));
+    assert.equal(typeof tick, "function");
+    const element = id => document.getElementById(id);
+    assert.equal(element("billableHours").textContent, "4.25");
+    assert.equal(element("weekTotal").textContent, "4.02 h / 40.00 h");
+    assert.equal(element("checkOut").value, "");
+    assert.equal(element("breakList").children.length, 0);
+    assert.equal(element("estimateLabel").hidden, false);
+    now = "2026-10-12T16:30:00Z";
+    tick();
+    assert.equal(element("billableHours").textContent, "8.00");
+    assert.equal(element("weekTotal").textContent, "8.00 h / 40.00 h");
+    assert.equal(element("dayProgressTrack").getAttribute("aria-valuenow"), "100");
+    assert.equal(element("dayProgress").style.width, "100%");
+    assert.equal(element("dayProgress").style.backgroundImage, "none");
+    assert.equal(element("checkOut").value, "");
+    assert.ok(requests.every(request => !request.options.method));
+    assert.equal(requests.filter(request => request.url.includes("/entries/")).length, 1);
+  } finally {
+    for (const [key, value] of Object.entries(originals)) {
+      if (value === undefined) delete globalThis[key]; else globalThis[key] = value;
+    }
+    dom.window.close();
+  }
 });

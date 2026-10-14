@@ -65,10 +65,19 @@ final class TracyUITests: XCTestCase {
         app.launch()
         defer { app.terminate() }
         let text = app.descendants(matching: .any).matching(identifier: "layout.negative").firstMatch
-        XCTAssertTrue(text.waitForExistence(timeout: 15))
-        let clipped = NSPredicate(format: "value BEGINSWITH %@", "clipped:")
-        expectation(for: clipped, evaluatedWith: text)
-        waitForExpectations(timeout: 5)
+        guard text.waitForExistence(timeout: 15) else {
+            XCTFail("Missing clipping negative control. \(app.debugDescription)")
+            return
+        }
+        // Resolve the settled accessibility snapshot directly, as the positive
+        // layout checks do. A predicate expectation adds a five-second wall
+        // deadline around a remote query that can itself take that long on CI.
+        // Pending, missing, and fits values must all fail this negative control.
+        let measurement = text.value as? String
+        XCTAssertTrue(
+            measurement?.hasPrefix("clipped:") == true,
+            "Expected truncated text; measured \(measurement ?? "missing"). \(text.debugDescription)"
+        )
     }
 
     @MainActor
@@ -151,10 +160,18 @@ final class TracyUITests: XCTestCase {
         notes.typeText("Offline project notes")
         app.buttons["saveEntry"].tap()
         XCTAssertTrue(app.staticTexts["Offline project notes"].waitForExistence(timeout: 3))
+        for _ in 0..<6 {
+            if app.staticTexts["1 days waiting to sync"].exists { break }
+            app.swipeUp()
+        }
         XCTAssertTrue(app.staticTexts["1 days waiting to sync"].exists)
         app.terminate()
         app.launch()
         XCTAssertTrue(app.staticTexts["Offline project notes"].waitForExistence(timeout: 10))
+        for _ in 0..<6 {
+            if app.staticTexts["1 days waiting to sync"].exists { break }
+            app.swipeUp()
+        }
         XCTAssertTrue(app.staticTexts["1 days waiting to sync"].exists)
         app.buttons["Recent Days"].firstMatch.tap()
         XCTAssertTrue(app.switches["Needs attention only"].waitForExistence(timeout: 3))

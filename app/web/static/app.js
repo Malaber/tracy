@@ -67,6 +67,59 @@ export function calculateDraft({ checkIn, checkOut, nextDay, breaks, rounding })
   return { exact, billable: roundUp(exact, rounding), breakMinutes };
 }
 
+// Projections never populate check-out or persist a default break.
+export function projectEntry(entry, { date, clock }, rounding = 15) {
+  if (!entry || entry.date !== date || !entry.check_in || entry.check_out) return null;
+  const start = parseClock(entry.check_in);
+  const end = parseClock(clock);
+  if (end < start) return null;
+  if (end === start) return { exact: 0, billable: 0, breakMinutes: 0 };
+  const breaks = entry.breaks.length || end - start <= 270
+    ? entry.breaks : [{ mode: "duration", duration_minutes: 30 }];
+  return calculateDraft({ checkIn: entry.check_in, checkOut: clock, nextDay: false, breaks, rounding });
+}
+
+export function dayProgress(minutes) {
+  const fraction = Math.max(0, Math.min(1, (minutes ?? 0) / 480));
+  return { percent: fraction * 100, color: `hsl(${35 + 105 * fraction} 75% 45%)` };
+}
+
+export function projectStatistics(data, entry, projection) {
+  if (!projection || !data.days.some(day => day.date === entry.date)) return data;
+  const result = structuredClone(data);
+  const day = result.days.find(day => day.date === entry.date);
+  const exactDelta = projection.exact - day.exact_minutes;
+  const billableDelta = projection.billable - day.billable_minutes;
+  day.exact_minutes = projection.exact;
+  day.billable_minutes = projection.billable;
+  day.balance_minutes += exactDelta;
+  day.status = "in_progress";
+  result.summary.exact_minutes += exactDelta;
+  result.summary.billable_minutes += billableDelta;
+  result.summary.balance_minutes += exactDelta;
+  result.summary.completion_percent = result.summary.target_minutes
+    ? result.summary.exact_minutes / result.summary.target_minutes * 100 : 0;
+  for (const week of result.weeks ?? []) {
+    if (entry.date >= week.week_start && entry.date <= shiftDate(week.week_start, 6)) {
+      week.exact_minutes += exactDelta;
+      week.billable_minutes += billableDelta;
+    }
+  }
+  return result;
+}
+
+function serverNow() {
+  const parts = Object.fromEntries(new Intl.DateTimeFormat("en-GB", {
+    timeZone: state.meta.timezone || "Europe/Berlin", year: "numeric", month: "2-digit",
+    day: "2-digit", hour: "2-digit", minute: "2-digit", hourCycle: "h23",
+  }).formatToParts(new Date()).map(part => [part.type, part.value]));
+  return { date: `${parts.year}-${parts.month}-${parts.day}`, clock: `${parts.hour}:${parts.minute}` };
+}
+
+function projectedTotals(data) {
+  return projectStatistics(data, state.todayEntry, projectEntry(state.todayEntry, serverNow(), state.preferences.rounding_minutes));
+}
+
 export function needsDefaultBreak({ checkIn, checkOut, nextDay, breaks, saved }) {
   if (saved || breaks.length || !String(checkIn ?? "").trim() || !String(checkOut ?? "").trim()) {
     return false;
@@ -157,6 +210,9 @@ async function api(path, options = {}) {
 const state = {
   currentDate: localISODate(),
   entry: null,
+  todayEntry: null,
+  weekData: null,
+  statisticsData: null,
   preferences: { federal_state: "DE", daily_target_minutes: 480, rounding_minutes: 15 },
   meta: { federal_states: {} },
   period: "month",
@@ -294,13 +350,20 @@ function updateLiveSummary() {
       addBreakRow();
       draft = collectDraft();
     }
-    const calculated = calculateDraft({
+    const projection = projectEntry({ ...draft, date: state.currentDate }, serverNow(), state.preferences.rounding_minutes);
+    const calculated = projection ?? calculateDraft({
       checkIn: draft.check_in,
       checkOut: draft.check_out,
       nextDay: draft.check_out_next_day,
       breaks: draft.breaks,
       rounding: state.preferences.rounding_minutes,
     });
+    byId("estimateLabel").hidden = !projection;
+    const progress = dayProgress(calculated.exact);
+    byId("dayProgress").style.width = `${progress.percent}%`;
+    byId("dayProgress").style.background = progress.color;
+    byId("dayProgressTrack").setAttribute("aria-valuenow", String(progress.percent));
+    byId("dayProgressText").textContent = `${formatDuration(calculated.exact)} / 8 h`;
     byId("billableHours").textContent = calculated.billable == null
       ? "—"
       : (calculated.billable / 60).toFixed(2);
@@ -314,12 +377,19 @@ function updateLiveSummary() {
   } catch (error) {
     byId("billableHours").textContent = "—";
     byId("exactDuration").textContent = "—";
+    byId("estimateLabel").hidden = true;
+    byId("dayProgress").style.width = "0%";
+    byId("dayProgressTrack").setAttribute("aria-valuenow", "0");
+    byId("dayProgressText").textContent = "— / 8 h";
     showFormError(error.message);
   }
+  if (state.weekData) renderWeekSummary(state.weekData);
+  if (state.statisticsData) renderStatistics(state.statisticsData);
 }
 
 function renderEntry(entry) {
   state.entry = entry;
+  if (entry.date === serverNow().date) state.todayEntry = entry;
   byId("checkIn").value = entry.check_in || "";
   byId("checkOut").value = entry.check_out || "";
   byId("nextDayCheckout").checked = entry.check_out_next_day;
@@ -348,7 +418,7 @@ async function loadEntry() {
 
 async function changeDate(value) {
   state.currentDate = value;
-  await loadEntry();
+  await Promise.all([loadEntry(), loadWeekSummary()]);
 }
 
 async function saveEntry() {
@@ -487,6 +557,9 @@ function requestVacationRemoval() {
 }
 
 function renderWeekSummary(data) {
+  const projected = projectedTotals(data);
+  byId("weekEstimate").hidden = projected === data;
+  data = projected;
   const summary = data.summary;
   byId("weekTotal").textContent = `${formatDuration(summary.exact_minutes, { decimal: true })} / ${formatDuration(summary.target_minutes, { decimal: true })}`;
   byId("weekBalance").textContent = formatDuration(summary.balance_minutes, { signed: true, decimal: true });
@@ -508,13 +581,17 @@ function renderWeekSummary(data) {
 
 async function loadWeekSummary() {
   try {
-    renderWeekSummary(await api(`/statistics?period=week&anchor=${state.currentDate}`));
+    state.weekData = await api(`/statistics?period=week&anchor=${state.currentDate}`);
+    renderWeekSummary(state.weekData);
   } catch (error) {
     showToast(error.message);
   }
 }
 
 function renderStatistics(data) {
+  const projected = projectedTotals(data);
+  byId("statisticsEstimate").hidden = projected === data;
+  data = projected;
   const summary = data.summary;
   const start = dateFromISO(data.start);
   const end = dateFromISO(data.end);
@@ -561,7 +638,8 @@ function renderStatistics(data) {
 
 async function loadStatistics() {
   try {
-    renderStatistics(await api(`/statistics?period=${state.period}&anchor=${state.statisticsAnchor}`));
+    state.statisticsData = await api(`/statistics?period=${state.period}&anchor=${state.statisticsAnchor}`);
+    renderStatistics(state.statisticsData);
     byId("exportCsv").href = `/api/v1/statistics/export.csv?period=${state.period}&anchor=${state.statisticsAnchor}`;
   } catch (error) {
     showToast(error.message);
@@ -619,6 +697,7 @@ function shiftStatistics(direction) {
 
 async function initialize() {
   [state.meta, state.preferences] = await Promise.all([api("/meta"), api("/preferences")]);
+  state.currentDate = serverNow().date;
   byId("federalState").innerHTML = Object.entries(state.meta.federal_states)
     .map(([code, name]) => `<option value="${code}">${escapeHtml(name)}</option>`).join("");
   document.querySelectorAll("[data-view]").forEach((button) => button.addEventListener("click", () => switchView(button.dataset.view)));
@@ -658,6 +737,8 @@ async function initialize() {
   byId("previousPeriod").addEventListener("click", () => shiftStatistics(-1));
   byId("nextPeriod").addEventListener("click", () => shiftStatistics(1));
   await Promise.all([loadEntry(), loadWeekSummary()]);
+  setInterval(updateLiveSummary, 60_000);
+  document.addEventListener("visibilitychange", () => { if (!document.hidden) updateLiveSummary(); });
   switchView(location.hash === "#statistics" ? "statistics" : "tracker");
 }
 

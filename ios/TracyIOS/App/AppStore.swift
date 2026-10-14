@@ -155,6 +155,11 @@ final class AppStore: ObservableObject {
         Task { await refresh() }
     }
 
+    var signOffEstimate: SignOffEstimate? {
+        SignOffEstimate.project(entry(today), now: currentDate, timezone: snapshot.timezone,
+                                rounding: snapshot.roundingMinutes ?? 15)
+    }
+
     func quickAction(checkOut: Bool) {
         if !isDemo { currentDate = Date() }
         do {
@@ -190,12 +195,16 @@ final class AppStore: ObservableObject {
             }
             try journal.cache(entries: [], timezone: meta.timezone)
             snapshot = journal.snapshot
+            let preferences = try TracyAPI.decoder.decode(WorkPreferences.self, from: await api.data("preferences"))
+            try journal.cacheRounding(preferences.roundingMinutes)
             try await JournalSynchronizer.synchronize(journal, using: api)
             snapshot = journal.snapshot
             let end = Clock.day(Date(), timezone: meta.timezone)
             let startDate = Clock.calendar(timezone: meta.timezone).date(
                 byAdding: .day, value: -13, to: Date())!
             let start = Clock.day(startDate, timezone: meta.timezone)
+            let week = try await api.statistics(period: "week", anchor: end)
+            try journal.cacheWeek(week)
             async let recent = api.statistics(anchor: end, start: start)
             async let entriesData = api.data(
                 "entries", query: [.init(name: "start", value: start), .init(name: "end", value: end)])

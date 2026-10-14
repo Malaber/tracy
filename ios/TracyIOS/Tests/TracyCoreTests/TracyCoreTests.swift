@@ -264,3 +264,48 @@ private actor MockServer: EntrySyncService {
     #expect(!FileManager.default.fileExists(atPath: file.path))
     #expect(try OfflineJournal(file: file).snapshot.entries.isEmpty)
 }
+
+@Test func liveSignOffEstimate() {
+    var entry = WorkEntry.empty(date: "2026-10-12")
+    entry.checkIn = "08:00"
+    func at(_ clock: String) -> Date {
+        ISO8601DateFormatter().date(from: "2026-10-12T\(clock):00Z")!
+    }
+    func estimate(_ clock: String, rounding: Int = 15) -> SignOffEstimate? {
+        SignOffEstimate.project(entry, now: at(clock), timezone: "UTC", rounding: rounding)
+    }
+    #expect(estimate("08:00")?.exactMinutes == 0)
+    #expect(estimate("12:30")?.exactMinutes == 270)
+    #expect(estimate("12:31")?.exactMinutes == 241)
+    #expect(estimate("12:31")?.billableMinutes == 255)
+    #expect(estimate("12:31")?.breakMinutes == 30)
+    #expect(estimate("16:31", rounding: 1)?.billableMinutes == 481)
+    #expect(estimate("16:31")?.progress == 1)
+    #expect(estimate("07:59") == nil)
+    #expect(entry.checkOut == nil && entry.breaks.isEmpty)
+    #expect(SignOffEstimate.project(entry, now: at("12:31"), timezone: "Pacific/Auckland") == nil)
+    entry.breaks = [.init(durationMinutes: 45)]
+    #expect(estimate("16:00")?.exactMinutes == 435)
+    entry.checkOut = "17:00"
+    #expect(estimate("18:00") == nil)
+}
+
+@Test func statisticsIncludeEstimateOnce() throws {
+    let fixture = """
+    {"start":"2026-10-12","end":"2026-10-18",
+     "summary":{"exact_minutes":480,"billable_minutes":480,"target_minutes":2400,"balance_minutes":-1920,"completed_days":1},
+     "days":[{"date":"2026-10-12","weekday":"Monday","is_weekend":false,"holiday":null,"is_day_off":false,"is_workday":true,"expected_minutes":480,"exact_minutes":0,"billable_minutes":0,"balance_minutes":-480,"status":"in_progress","notes":""}]}
+    """
+    let saved = try TracyAPI.decoder.decode(Statistics.self, from: Data(fixture.utf8))
+    let estimate = SignOffEstimate(exactMinutes: 241, billableMinutes: 255, breakMinutes: 30)
+    let projected = saved.projecting(estimate, date: "2026-10-12")
+    #expect(projected.summary.exactMinutes == 721)
+    #expect(projected.summary.billableMinutes == 735)
+    #expect(projected.summary.balanceMinutes == -1679)
+    #expect(projected.summary.completedDays == 1)
+    #expect(projected.days[0].status == "in_progress")
+    #expect(projected.days[0].balanceMinutes == -239)
+    #expect(projected.projecting(estimate, date: "2026-10-12").summary.exactMinutes == 721)
+    #expect(saved.summary.exactMinutes == 480)
+    #expect(saved.projecting(estimate, date: "2025-01-01").summary.exactMinutes == 480)
+}
