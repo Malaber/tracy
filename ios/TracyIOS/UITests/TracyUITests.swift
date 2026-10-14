@@ -65,10 +65,19 @@ final class TracyUITests: XCTestCase {
         app.launch()
         defer { app.terminate() }
         let text = app.descendants(matching: .any).matching(identifier: "layout.negative").firstMatch
-        XCTAssertTrue(text.waitForExistence(timeout: 15))
-        let clipped = NSPredicate(format: "value BEGINSWITH %@", "clipped:")
-        expectation(for: clipped, evaluatedWith: text)
-        waitForExpectations(timeout: 5)
+        guard text.waitForExistence(timeout: 15) else {
+            XCTFail("Missing clipping negative control. \(app.debugDescription)")
+            return
+        }
+        // Resolve the settled accessibility snapshot directly, as the positive
+        // layout checks do. A predicate expectation adds a five-second wall
+        // deadline around a remote query that can itself take that long on CI.
+        // Pending, missing, and fits values must all fail this negative control.
+        let measurement = text.value as? String
+        XCTAssertTrue(
+            measurement?.hasPrefix("clipped:") == true,
+            "Expected truncated text; measured \(measurement ?? "missing"). \(text.debugDescription)"
+        )
     }
 
     @MainActor
