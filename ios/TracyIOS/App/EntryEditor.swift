@@ -8,10 +8,19 @@ struct EntryEditor: View {
     @State private var draft: EntryPayload
     @State private var confirmDiscard = false
     @State private var error: String?
+    @State private var showVacation = false
+    @State private var checkoutDate: Date
+    let checkoutPrompt: Bool
+    let timezone: String
 
-    init(entry: WorkEntry) {
+    init(entry: WorkEntry, checkoutPrompt: Bool = false, timezone: String = "Europe/Berlin") {
         self.entry = entry
+        self.checkoutPrompt = checkoutPrompt
+        self.timezone = timezone
         _draft = State(initialValue: entry.payload)
+        let base = WorkdayDates.date(entry.date, minutes: (entry.checkOut.flatMap(Clock.minutes) ?? 17 * 60)
+                                    + (entry.checkOutNextDay ? 1440 : 0), timezone: timezone) ?? Date()
+        _checkoutDate = State(initialValue: base)
     }
 
     private var changed: Bool { draft != entry.payload }
@@ -22,11 +31,30 @@ struct EntryEditor: View {
             Form {
                 Section {
                     Text(Clock.title(entry.date)).font(.headline)
-                    Label("Saved on this device first", systemImage: "iphone")
                     Text(
                         "Your entry syncs automatically when Tracy can connect. Times use \(store.snapshot.timezone)."
                     )
                     .font(.footnote).foregroundStyle(.secondary)
+                }
+                if checkoutPrompt {
+                    Section("Forgot to check out?") {
+                        Text("Choose when you actually finished. Review the entry, then save.")
+                        DatePicker("Actual checkout", selection: $checkoutDate, displayedComponents: [.date, .hourAndMinute])
+                            .environment(\.timeZone, TimeZone(identifier: timezone) ?? .current)
+                            .accessibilityIdentifier("actualCheckout")
+                        Button("Use this checkout") {
+                            do {
+                                draft = try WorkdayDates.checkout(checkoutDate, day: entry.date,
+                                                                  timezone: timezone, payload: draft)
+                                error = nil
+                            } catch { self.error = error.localizedDescription }
+                        }.accessibilityIdentifier("applyActualCheckout")
+                    }
+                }
+                Section("Vacation") {
+                    Button(store.entry(entry.date).isDayOff ? "Manage vacation" : "Mark vacation") {
+                        showVacation = true
+                    }.accessibilityIdentifier("entryVacation")
                 }
                 Section("Working time") {
                     Toggle(
@@ -103,7 +131,7 @@ struct EntryEditor: View {
                     Text("Breaks")
                 } footer: {
                     Text(
-                        "When a day is first completed with more than 4½ hours and no break, Tracy adds a 30-minute break. You can adjust it after syncing. Overnight break ranges are supported."
+                        "When a day is first completed with more than six hours and no break, Tracy adds a 30-minute break. You can adjust it after syncing. Overnight break ranges are supported."
                     )
                 }
                 Section("Notes") {
@@ -132,6 +160,7 @@ struct EntryEditor: View {
                     }.disabled(validation != nil).accessibilityIdentifier("saveEntry")
                 }
             }
+            .sheet(isPresented: $showVacation) { VacationEditor(initialDay: entry.date) }
             .interactiveDismissDisabled(changed)
             .confirmationDialog(
                 "Discard your changes?", isPresented: $confirmDiscard, titleVisibility: .visible

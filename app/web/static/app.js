@@ -74,7 +74,7 @@ export function projectEntry(entry, { date, clock }, rounding = 15) {
   const end = parseClock(clock);
   if (end < start) return null;
   if (end === start) return { exact: 0, billable: 0, breakMinutes: 0 };
-  const breaks = entry.breaks.length || end - start <= 270
+  const breaks = entry.breaks.length || end - start <= 360
     ? entry.breaks : [{ mode: "duration", duration_minutes: 30 }];
   return calculateDraft({ checkIn: entry.check_in, checkOut: clock, nextDay: false, breaks, rounding });
 }
@@ -127,7 +127,7 @@ export function needsDefaultBreak({ checkIn, checkOut, nextDay, breaks, saved })
   try {
     const start = parseClock(checkIn);
     const end = parseClock(checkOut);
-    return end + (nextDay ? 1440 : 0) - start > 4 * 60 + 30;
+    return end + (nextDay ? 1440 : 0) - start > 6 * 60;
   } catch {
     return false;
   }
@@ -237,7 +237,8 @@ function showFormError(message = "") {
 
 function updateDateHeading() {
   const date = dateFromISO(state.currentDate);
-  const today = localISODate();
+  const today = serverNow().date;
+  byId("goToToday").hidden = state.currentDate === today;
   byId("workDate").value = state.currentDate;
   byId("entryWeekday").textContent = state.currentDate === today
     ? "Today"
@@ -371,10 +372,12 @@ function updateLiveSummary() {
     byId("breakDuration").textContent = calculated.breakMinutes
       ? formatDuration(calculated.breakMinutes)
       : "0 min";
+    byId("breakDeduction").textContent = calculated.exact == null ? "" : `${formatDuration(calculated.breakMinutes)} breaks deducted`;
     const increment = state.preferences.rounding_minutes;
     byId("roundingDescription").textContent = increment === 1 ? "No rounding" : `Next ${increment} min`;
     showFormError();
   } catch (error) {
+    byId("breakDeduction").textContent = "";
     byId("billableHours").textContent = "—";
     byId("exactDuration").textContent = "—";
     byId("estimateLabel").hidden = true;
@@ -561,10 +564,12 @@ function renderWeekSummary(data) {
   byId("weekEstimate").hidden = projected === data;
   data = projected;
   const summary = data.summary;
-  byId("weekTotal").textContent = `${formatDuration(summary.exact_minutes, { decimal: true })} / ${formatDuration(summary.target_minutes, { decimal: true })}`;
-  byId("weekBalance").textContent = formatDuration(summary.balance_minutes, { signed: true, decimal: true });
-  byId("weekBalance").className = `balance-badge ${summary.balance_minutes > 0 ? "is-positive" : summary.balance_minutes < 0 ? "is-negative" : ""}`;
-  byId("weekProgress").style.width = `${Math.min(100, summary.completion_percent)}%`;
+  const balance = summary.billable_minutes - summary.target_minutes;
+  const completion = summary.target_minutes ? summary.billable_minutes / summary.target_minutes * 100 : 0;
+  byId("weekTotal").textContent = `${formatDuration(summary.billable_minutes, { decimal: true })} / ${formatDuration(summary.target_minutes, { decimal: true })}`;
+  byId("weekBalance").textContent = formatDuration(balance, { signed: true, decimal: true });
+  byId("weekBalance").className = `balance-badge ${balance > 0 ? "is-positive" : balance < 0 ? "is-negative" : ""}`;
+  byId("weekProgress").style.width = `${Math.min(100, completion)}%`;
   const rows = data.days.filter((day) => day.is_workday || day.is_day_off || day.status !== "empty").slice(0, 5);
   byId("recentDays").innerHTML = rows.map((day) => {
     const date = dateFromISO(day.date);
@@ -575,7 +580,7 @@ function renderWeekSummary(data) {
       day.is_day_off ? "is-vacation" : "",
     ].filter(Boolean).join(" ");
     const vacation = day.is_day_off ? '<small class="vacation-label">Vacation</small>' : "";
-    return `<div class="${classes}"><div><i>${letter}</i><span>${new Intl.DateTimeFormat("en", { weekday: "short", day: "2-digit" }).format(date)}${vacation}</span></div><strong>${day.exact_minutes ? formatDuration(day.exact_minutes, { decimal: true }) : "—"}</strong></div>`;
+    return `<div class="${classes}"><div><i>${letter}</i><span>${new Intl.DateTimeFormat("en", { weekday: "short", day: "2-digit" }).format(date)}${vacation}</span></div><strong>${day.billable_minutes ? formatDuration(day.billable_minutes, { decimal: true }) : "—"}</strong></div>`;
   }).join("");
 }
 
@@ -707,6 +712,7 @@ async function initialize() {
     loadStatistics();
   }));
   byId("previousDay").addEventListener("click", () => changeDate(shiftDate(state.currentDate, -1)));
+  byId("goToToday").addEventListener("click", () => changeDate(serverNow().date));
   byId("nextDay").addEventListener("click", () => changeDate(shiftDate(state.currentDate, 1)));
   byId("datePickerButton").addEventListener("click", () => byId("workDate").showPicker?.());
   byId("workDate").addEventListener("change", (event) => changeDate(event.target.value));

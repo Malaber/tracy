@@ -244,7 +244,7 @@ async def test_new_long_day_gets_default_break(client, monkeypatch):
     manual_date = "2026-08-10"
     manual = await client.put(
         f"/api/v1/entries/{manual_date}",
-        json={"check_in": "08:00", "check_out": "12:31", "breaks": []},
+        json={"check_in": "08:00", "check_out": "14:01", "breaks": []},
     )
     assert manual.status_code == 200
     assert manual.json()["break_minutes"] == 30
@@ -260,7 +260,7 @@ async def test_new_long_day_gets_default_break(client, monkeypatch):
     class FixedDateTime(datetime):
         @classmethod
         def now(cls, timezone=None):
-            return cls(2026, 8, 11, 13, 0, tzinfo=timezone)
+            return cls(2026, 8, 11, 15, 0, tzinfo=timezone)
 
     monkeypatch.setattr("app.api.v1.routes.datetime", FixedDateTime)
     action = await client.post(f"/api/v1/entries/{action_date}/check-out")
@@ -290,3 +290,37 @@ async def test_authentication_gates_web_and_api(unauthenticated_client):
     assert (
         await unauthenticated_client.post("/api/v1/auth/passkey-add/unsupported/options")
     ).status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_reopen_and_resume_preserve_breaks(client):
+    url = "/api/v1/entries/2026-08-12"
+    payload = {"check_in": "08:00", "check_out": "15:00", "breaks": [], "notes": "Preserve"}
+    closed = await client.put(url, json=payload)
+    assert closed.status_code == 200
+    payload["breaks"] = closed.json()["breaks"]
+    payload["check_out"] = None
+    reopened = await client.put(url, json=payload)
+    assert reopened.status_code == 200
+    assert reopened.json()["break_minutes"] == 30
+    assert reopened.json()["exact_minutes"] is None
+    payload["breaks"].append({"mode": "range", "start": "15:00", "end": "16:00"})
+    resumed = await client.put(url, json=payload)
+    assert resumed.status_code == 200
+    assert resumed.json()["break_minutes"] == 90
+    payload["check_out"] = "17:00"
+    finished = await client.put(url, json=payload)
+    assert finished.status_code == 200
+    assert finished.json()["exact_minutes"] == 450
+    assert finished.json()["notes"] == "Preserve"
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(("checkout", "deduction"), [("12:59", 0), ("14:00", 0), ("14:01", 30)])
+async def test_saved_default_break_uses_six_hour_boundary(client, checkout, deduction):
+    response = await client.put(
+        "/api/v1/entries/2026-08-14",
+        json={"check_in": "08:00", "check_out": checkout, "breaks": []},
+    )
+    assert response.status_code == 200
+    assert response.json()["break_minutes"] == deduction

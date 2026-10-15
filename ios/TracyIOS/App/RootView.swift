@@ -4,6 +4,8 @@ import TracyCore
 struct RootView: View {
     @EnvironmentObject private var store: AppStore
     @Environment(\.scenePhase) private var scenePhase
+    @EnvironmentObject private var notifications: WorkdayNotifications
+    @AppStorage("workdayReminders") private var remindersEnabled = false
 
     var body: some View {
         Group {
@@ -18,6 +20,15 @@ struct RootView: View {
                 }
             }
         }
+        .task(id: store.reminderKey + String(remindersEnabled) + String(describing: scenePhase)) {
+            if !store.isDemo {
+                await notifications.synchronize(entry: store.reminderEntry, timezone: store.snapshot.timezone,
+                                                account: store.notificationAccount, enabled: remindersEnabled)
+            }
+        }
+        .sheet(item: $notifications.checkoutRequest) { request in
+            NotificationCheckoutView(request: request)
+        }
         .alert(
             "Tracy", isPresented: Binding(get: { store.error != nil }, set: { if !$0 { store.error = nil } })
         ) {
@@ -27,7 +38,15 @@ struct RootView: View {
         }
         .task {
             await store.refresh()
-            if store.isDemo { return }
+            if store.isDemo {
+                #if DEBUG
+                if ProcessInfo.processInfo.arguments.contains("--ui-notification-checkout"),
+                    let account = store.notificationAccount {
+                    notifications.openCheckout(day: store.today, account: account)
+                }
+                #endif
+                return
+            }
             while !Task.isCancelled {
                 do { try await Task.sleep(for: .seconds(60)) } catch { return }
                 if scenePhase == .active { await store.refresh() }
@@ -72,6 +91,7 @@ struct SyncStatus: View {
 struct TodayView: View {
     @EnvironmentObject private var store: AppStore
     @State private var editing: WorkEntry?
+    @State private var showVacation = false
     private var entry: WorkEntry { store.entry(store.today) }
 
     var body: some View {
@@ -92,6 +112,12 @@ struct TodayView: View {
                         LayoutCheckedText(headline, key: "headline").font(.largeTitle.bold())
                             .accessibilityAddTraits(.isHeader)
                             .accessibilityHint(subtitle)
+                        if let billable = store.signOffEstimate?.billableMinutes ?? entry.billableMinutes {
+                            LayoutCheckedText("\(Clock.duration(billable)) billable", key: "billable")
+                                .font(.subheadline).accessibilityIdentifier("heroBillable")
+                        }
+                        LayoutCheckedText("\(Clock.duration(store.signOffEstimate?.breakMinutes ?? entry.breakMinutes)) breaks deducted", key: "breaks")
+                            .font(.footnote).accessibilityIdentifier("heroBreaks")
                         let minutes = store.signOffEstimate?.exactMinutes ?? entry.exactMinutes ?? 0
                         let progress = min(1, max(0, Double(minutes) / 480))
                         ProgressView(value: progress) {
@@ -111,6 +137,13 @@ struct TodayView: View {
                             }
                             .modifier(PrimaryActionStyle())
                             .accessibilityIdentifier("quickAction")
+                        } else if !entry.checkOutNextDay {
+                            Button("Resume work") { store.reopenToday(recordGap: true) }
+                                .modifier(PrimaryActionStyle())
+                                .accessibilityIdentifier("resumeWork")
+                            Text("Time since checkout will be added as a break.").font(.footnote)
+                            Button("Undo checkout") { store.reopenToday(recordGap: false) }
+                                .accessibilityIdentifier("undoCheckout")
                         }
                     }
                     .padding(.vertical, 8)
@@ -121,12 +154,6 @@ struct TodayView: View {
                         "Check-out",
                         value: (entry.checkOut ?? "Not entered")
                             + (entry.checkOutNextDay ? " · next day" : ""))
-                    if store.signOffEstimate != nil || !store.isPending(store.today) {
-                        dayValue("Breaks", value: Clock.duration(store.signOffEstimate?.breakMinutes ?? entry.breakMinutes))
-                        if let billable = store.signOffEstimate?.billableMinutes ?? entry.billableMinutes {
-                            dayValue("Billable", value: Clock.duration(billable))
-                        }
-                    }
                     if !entry.notes.isEmpty { Text(entry.notes) }
                     Button {
                         editing = entry
@@ -152,9 +179,9 @@ struct TodayView: View {
                     savedWeek.start <= store.today && store.today <= savedWeek.end {
                     let week = savedWeek.projecting(store.signOffEstimate, date: store.today)
                     Section("This week") {
-                        LabeledContent("Working time", value: Clock.duration(week.summary.exactMinutes))
+                        LabeledContent("Billable time", value: Clock.duration(week.summary.billableMinutes))
                         LabeledContent("Target", value: Clock.duration(week.summary.targetMinutes))
-                        LabeledContent("Balance", value: Clock.duration(week.summary.balanceMinutes))
+                        LabeledContent("Balance", value: Clock.duration(week.summary.billableMinutes - week.summary.targetMinutes))
                         if store.signOffEstimate != nil {
                             Text("Includes live sign-off estimate").font(.footnote).foregroundStyle(.secondary)
                         }
@@ -177,6 +204,13 @@ struct TodayView: View {
             }
             .modifier(ReadableScrollEdge())
             .navigationTitle("Today")
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button("Vacation", systemImage: "calendar.badge.plus") { showVacation = true }
+                        .accessibilityIdentifier("manageVacation")
+                }
+            }
+            .sheet(isPresented: $showVacation) { VacationEditor(initialDay: store.today) }
             .refreshable { await store.refresh() }
             .sheet(item: $editing) { EntryEditor(entry: $0) }
         }

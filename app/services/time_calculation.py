@@ -6,7 +6,7 @@ from typing import Any
 
 TIME_PATTERN = re.compile(r"^(\d{1,2}):(\d{2})$")
 DECIMAL_PATTERN = re.compile(r"^\d{1,2}(?:[.,]\d+)?$")
-DEFAULT_BREAK_THRESHOLD_MINUTES = 4 * 60 + 30
+DEFAULT_BREAK_THRESHOLD_MINUTES = 6 * 60
 DEFAULT_BREAK_MINUTES = 30
 
 
@@ -104,9 +104,8 @@ def calculate_work_minutes(
     if check_in is None:
         raise ValueError("A check-out needs a check-in time.")
     if check_out is None:
-        if break_minutes:
-            raise ValueError("Complete the check-out before adding breaks.")
-        return None, 0
+        # A reopened day retains its breaks while checkout is pending.
+        return None, break_minutes
 
     span = duration_for_range(check_in, check_out, crosses_midnight=check_out_next_day)
     if break_minutes >= span:

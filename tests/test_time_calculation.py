@@ -49,8 +49,10 @@ def test_calculate_complete_workday_with_both_break_types():
 
 def test_default_break_applies_only_to_long_days_without_breaks():
     assert not needs_default_break(480, 750, False, [])
-    assert needs_default_break(480, 751, False, [])
-    assert needs_default_break(1320, 180, True, [])
+    assert not needs_default_break(480, 779, False, [])
+    assert not needs_default_break(480, 840, False, [])
+    assert needs_default_break(480, 841, False, [])
+    assert needs_default_break(1320, 241, True, [])
     assert not needs_default_break(480, 1020, False, [{"mode": "duration"}])
     assert not needs_default_break(None, 1020, False, [])
 
@@ -67,7 +69,6 @@ def test_calculate_overnight_break_and_incomplete_entries():
     [
         (None, None, False, [{"mode": "duration", "duration_minutes": 10}]),
         (None, 600, False, []),
-        (480, None, False, [{"mode": "duration", "duration_minutes": 10}]),
         (480, 500, False, [{"mode": "duration", "duration_minutes": 20}]),
     ],
 )
@@ -87,3 +88,9 @@ def test_reject_invalid_workday_combinations(arguments):
 def test_reject_invalid_breaks(breaks):
     with pytest.raises(ValueError):
         calculate_break_minutes(breaks)
+
+
+def test_ongoing_day_retains_breaks():
+    assert calculate_work_minutes(
+        480, None, False, [{"mode": "duration", "duration_minutes": 30}]
+    ) == (None, 30)
