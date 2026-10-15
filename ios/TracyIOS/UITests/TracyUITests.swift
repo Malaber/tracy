@@ -220,7 +220,7 @@ final class TracyUITests: XCTestCase {
         let remove = app.buttons["removeBreak1"]
         reveal(remove)
         remove.tap()
-        XCTAssertFalse(remove.exists)
+        XCTAssertTrue(remove.waitForNonExistence(timeout: 5))
         app.buttons["saveEntry"].tap()
         XCTAssertTrue(app.staticTexts["heroBreaks"].waitForExistence(timeout: 5))
         XCTAssertEqual(app.staticTexts["heroBreaks"].label, "0h 0m breaks deducted")
@@ -230,14 +230,14 @@ final class TracyUITests: XCTestCase {
         app.buttons["editToday"].tap()
         let add = app.buttons["Add break"]
         reveal(add)
-        XCTAssertFalse(remove.exists)
+        XCTAssertTrue(remove.waitForNonExistence(timeout: 5))
         add.tap()
         reveal(add)
         add.tap()
         reveal(app.buttons["removeBreak2"])
         app.buttons["removeBreak2"].swipeLeft()
         app.buttons["Delete"].tap()
-        XCTAssertFalse(app.buttons["removeBreak2"].exists)
+        XCTAssertTrue(app.buttons["removeBreak2"].waitForNonExistence(timeout: 5))
         let duration = app.steppers["breakDuration1"]
         reveal(duration)
         XCTAssertEqual(duration.value as? String, "30 minutes")
@@ -247,7 +247,7 @@ final class TracyUITests: XCTestCase {
         XCTAssertEqual(duration.value as? String, "1 minutes")
         duration.buttons["breakDuration1-Decrement"].tap()
         app.buttons["Remove break"].tap()
-        XCTAssertFalse(remove.exists)
+        XCTAssertTrue(remove.waitForNonExistence(timeout: 5))
         app.buttons["saveEntry"].tap()
         XCTAssertTrue(app.staticTexts["heroBreaks"].waitForExistence(timeout: 5))
         XCTAssertEqual(app.staticTexts["heroBreaks"].label, "0h 0m breaks deducted")
@@ -256,7 +256,7 @@ final class TracyUITests: XCTestCase {
         XCTAssertTrue(app.buttons["editToday"].waitForExistence(timeout: 15))
         app.buttons["editToday"].tap()
         reveal(add)
-        XCTAssertFalse(remove.exists)
+        XCTAssertTrue(remove.waitForNonExistence(timeout: 5))
     }
 
     @MainActor
