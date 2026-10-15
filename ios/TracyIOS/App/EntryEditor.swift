@@ -7,6 +7,8 @@ struct EntryEditor: View {
     let entry: WorkEntry
     @State private var draft: EntryPayload
     @State private var confirmDiscard = false
+    @State private var breakIDs: [UUID]
+    @State private var breakToRemove: UUID?
     @State private var error: String?
     @State private var showVacation = false
     @State private var checkoutDate: Date
@@ -18,6 +20,7 @@ struct EntryEditor: View {
         self.checkoutPrompt = checkoutPrompt
         self.timezone = timezone
         _draft = State(initialValue: entry.payload)
+        _breakIDs = State(initialValue: entry.breaks.map { _ in UUID() })
         let base = WorkdayDates.date(entry.date, minutes: (entry.checkOut.flatMap(Clock.minutes) ?? 17 * 60)
                                     + (entry.checkOutNextDay ? 1440 : 0), timezone: timezone) ?? Date()
         _checkoutDate = State(initialValue: base)
@@ -79,54 +82,55 @@ struct EntryEditor: View {
                     }
                 }
                 Section {
-                    ForEach(draft.breaks.indices, id: \.self) { index in
+                    ForEach(breakIDs, id: \.self) { id in
+                        let index = breakIDs.firstIndex(of: id) ?? 0
+                        let item = breakBinding(id)
                         VStack(alignment: .leading, spacing: 12) {
-                            Picker(
-                                "Break \(index + 1)",
-                                selection: Binding(
-                                    get: { draft.breaks[index].mode },
-                                    set: { mode in
-                                        draft.breaks[index] =
-                                            mode == "duration"
-                                            ? WorkBreak()
-                                            : WorkBreak(
-                                                mode: "range", durationMinutes: nil, start: "12:00",
-                                                end: "12:30")
-                                    })
-                            ) {
+                            Picker("Break \(index + 1)", selection: Binding(
+                                get: { item.wrappedValue.mode },
+                                set: { mode in
+                                    item.wrappedValue = mode == "duration" ? WorkBreak()
+                                        : WorkBreak(mode: "range", durationMinutes: nil,
+                                                    start: "12:00", end: "12:30")
+                                })) {
                                 Text("Duration").tag("duration")
                                 Text("Start and end").tag("range")
                             }
-                            if draft.breaks[index].mode == "duration" {
-                                Stepper(
-                                    "\(draft.breaks[index].durationMinutes ?? 30) minutes",
+                            if item.wrappedValue.mode == "duration" {
+                                Stepper("\(item.wrappedValue.durationMinutes ?? 30) minutes",
                                     value: Binding(
-                                        get: { draft.breaks[index].durationMinutes ?? 30 },
-                                        set: { draft.breaks[index].durationMinutes = $0 }
-                                    ), in: 1...1440
-                                )
-                                .accessibilityLabel("Break \(index + 1) duration")
-                                .accessibilityValue("\(draft.breaks[index].durationMinutes ?? 30) minutes")
+                                        get: { item.wrappedValue.durationMinutes ?? 30 },
+                                        set: { value in
+                                            if value == 0 { breakToRemove = id }
+                                            else { item.wrappedValue.durationMinutes = value }
+                                        }), in: 0...1440)
+                                    .accessibilityLabel("Break \(index + 1) duration")
+                                    .accessibilityValue("\(item.wrappedValue.durationMinutes ?? 30) minutes")
+                                    .accessibilityIdentifier("breakDuration\(index + 1)")
                             } else {
-                                ClockPicker(
-                                    title: "Break starts",
-                                    value: Binding(
-                                        get: { draft.breaks[index].start ?? "12:00" },
-                                        set: { draft.breaks[index].start = $0 }))
-                                ClockPicker(
-                                    title: "Break ends",
-                                    value: Binding(
-                                        get: { draft.breaks[index].end ?? "12:30" },
-                                        set: { draft.breaks[index].end = $0 }))
+                                ClockPicker(title: "Break starts", value: Binding(
+                                    get: { item.wrappedValue.start ?? "12:00" },
+                                    set: { item.wrappedValue.start = $0 }))
+                                ClockPicker(title: "Break ends", value: Binding(
+                                    get: { item.wrappedValue.end ?? "12:30" },
+                                    set: { item.wrappedValue.end = $0 }))
                             }
                             Button("Remove break \(index + 1)", role: .destructive) {
-                                draft.breaks.remove(at: index)
+                                removeBreak(id)
                             }
+                            .buttonStyle(.borderless)
+                            .accessibilityIdentifier("removeBreak\(index + 1)")
                         }
                         .padding(.vertical, 6)
+                        .swipeActions {
+                            Button("Delete", role: .destructive) { removeBreak(id) }
+                        }
                     }
-                    Button("Add break", systemImage: "plus") { draft.breaks.append(WorkBreak()) }
-                        .disabled(draft.breaks.count >= 20 || draft.checkOut == nil)
+                    Button("Add break", systemImage: "plus") {
+                        draft.breaks.append(WorkBreak())
+                        breakIDs.append(UUID())
+                    }
+                    .disabled(draft.breaks.count >= 20 || draft.checkIn == nil)
                 } header: {
                     Text("Breaks")
                 } footer: {
@@ -161,6 +165,16 @@ struct EntryEditor: View {
                 }
             }
             .sheet(isPresented: $showVacation) { VacationEditor(initialDay: entry.date) }
+            .confirmationDialog("Remove this break?", isPresented: Binding(
+                get: { breakToRemove != nil },
+                set: { if !$0 { breakToRemove = nil } }), titleVisibility: .visible) {
+                if let id = breakToRemove {
+                    Button("Remove break", role: .destructive) {
+                        removeBreak(id)
+                        breakToRemove = nil
+                    }
+                }
+            }
             .interactiveDismissDisabled(changed)
             .confirmationDialog(
                 "Discard your changes?", isPresented: $confirmDiscard, titleVisibility: .visible
@@ -168,6 +182,23 @@ struct EntryEditor: View {
                 Button("Discard changes", role: .destructive) { dismiss() }
             }
         }
+    }
+
+    // Bind by identity: SwiftUI may retain a row binding after a neighbouring row is deleted.
+    private func breakBinding(_ id: UUID) -> Binding<WorkBreak> {
+        Binding(get: {
+            guard let index = breakIDs.firstIndex(of: id) else { return WorkBreak() }
+            return draft.breaks[index]
+        }, set: { value in
+            guard let index = breakIDs.firstIndex(of: id) else { return }
+            draft.breaks[index] = value
+        })
+    }
+
+    private func removeBreak(_ id: UUID) {
+        guard let index = breakIDs.firstIndex(of: id) else { return }
+        draft.breaks.remove(at: index)
+        breakIDs.remove(at: index)
     }
 
     private func clockBinding(_ keyPath: WritableKeyPath<EntryPayload, String?>) -> Binding<String> {

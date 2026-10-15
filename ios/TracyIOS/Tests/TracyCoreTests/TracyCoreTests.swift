@@ -344,3 +344,25 @@ private actor MockServer: EntrySyncService {
     entry.checkOut = "17:00"
     #expect(entry.payload.validationMessage == nil)
 }
+
+@Test @MainActor func removedBreakDoesNotLeaveStaleDeductionOffline() throws {
+    let (journal, file) = try journal()
+    defer { try? FileManager.default.removeItem(at: file) }
+    let day = "2026-10-15"
+    var saved = WorkEntry.empty(date: day)
+    saved.checkIn = "08:00"
+    saved.checkOut = "17:00"
+    saved.breaks = [.init(durationMinutes: 30)]
+    saved.breakMinutes = 30
+    try journal.cache(entries: [saved])
+    var payload = saved.payload
+    payload.breaks = []
+    try journal.enqueue(date: day, payload: payload)
+    #expect(journal.entry(day).breaks.isEmpty)
+    #expect(journal.entry(day).breakMinutes == 0)
+    let reopened = try OfflineJournal(file: file)
+    #expect(reopened.entry(day).breakMinutes == 0)
+    payload.breaks = [.init(mode: "range", durationMinutes: nil, start: "23:50", end: "00:10")]
+    try reopened.enqueue(date: day, payload: payload)
+    #expect(reopened.entry(day).breakMinutes == 20)
+}

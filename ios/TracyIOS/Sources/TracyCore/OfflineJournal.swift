@@ -73,6 +73,12 @@ public final class OfflineJournal {
             entry.checkOut = pending.payload.checkOut
             entry.checkOutNextDay = pending.payload.checkOutNextDay
             entry.breaks = pending.payload.breaks
+            entry.breakMinutes = pending.payload.breaks.reduce(0) { total, item in
+                if item.mode == "duration" { return total + (item.durationMinutes ?? 0) }
+                guard let start = item.start.flatMap(Clock.minutes),
+                      let end = item.end.flatMap(Clock.minutes) else { return total }
+                return total + end - start + (end < start ? 1440 : 0)
+            }
             entry.notes = pending.payload.notes
             entry.status =
                 entry.checkIn == nil ? "empty" : (entry.checkOut == nil ? "in_progress" : "complete")
