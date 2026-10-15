@@ -88,10 +88,11 @@ final class TracyUITests: XCTestCase {
         defer { app.terminate() }
         for key in [
             "date", "headline", "action", "section", "label.Check-in", "value.Check-in",
-            "label.Check-out", "value.Check-out", "label.Breaks", "value.Breaks", "edit", "review",
+            "label.Check-out", "value.Check-out", "breaks", "billable", "edit", "review",
         ] {
             // Buttons retain their existing identifiers and inherit their label value.
-            let identifier = key == "action" ? "quickAction" : key == "edit" ? "editToday" : "layout.\(key)"
+            let identifier = key == "action" ? "quickAction" : key == "edit" ? "editToday"
+                : key == "billable" ? "heroBillable" : key == "breaks" ? "heroBreaks" : "layout.\(key)"
             let text = app.descendants(matching: .any).matching(identifier: identifier).firstMatch
             for _ in 0..<6 {
                 if text.exists { break }
@@ -175,6 +176,26 @@ final class TracyUITests: XCTestCase {
         XCTAssertTrue(app.staticTexts["1 days waiting to sync"].exists)
         app.buttons["Recent Days"].firstMatch.tap()
         XCTAssertTrue(app.switches["Needs attention only"].waitForExistence(timeout: 3))
+    }
+
+    @MainActor
+    func testResumeAndUndoCheckout() {
+        let app = XCUIApplication()
+        app.launchArguments = testArguments
+        app.launchEnvironment["TRACY_UI_JOURNAL"] = UUID().uuidString
+        app.launch()
+        defer { app.terminate() }
+        XCTAssertTrue(app.staticTexts["heroBillable"].waitForExistence(timeout: 15))
+        XCTAssertTrue(app.staticTexts["heroBreaks"].label.contains("breaks deducted"))
+        app.buttons["quickAction"].tap()
+        XCTAssertTrue(app.buttons["resumeWork"].waitForExistence(timeout: 10))
+        app.buttons["resumeWork"].tap()
+        XCTAssertTrue(app.buttons["quickAction"].waitForExistence(timeout: 10))
+        app.buttons["quickAction"].tap()
+        XCTAssertTrue(app.buttons["undoCheckout"].waitForExistence(timeout: 10))
+        app.buttons["undoCheckout"].tap()
+        XCTAssertTrue(app.buttons["quickAction"].waitForExistence(timeout: 10))
+        XCTAssertTrue(app.staticTexts["heroBillable"].exists)
     }
 
     @MainActor

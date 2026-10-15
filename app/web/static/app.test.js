@@ -166,7 +166,11 @@ test("tracker updates live estimates every minute without saving checkout", asyn
     assert.equal(typeof tick, "function");
     const element = id => document.getElementById(id);
     assert.equal(element("billableHours").textContent, "4.25");
-    assert.equal(element("weekTotal").textContent, "4.02 h / 40.00 h");
+    assert.equal(element("weekTotal").textContent, "4.25 h / 40.00 h");
+    assert.equal(element("weekBalance").textContent, "−35.75 h");
+    assert.equal(element("weekProgress").style.width, "10.625%");
+    assert.equal(element("recentDays").querySelector("strong").textContent, "4.25 h");
+    assert.equal(element("breakDeduction").textContent, "0 h 30 min breaks deducted");
     assert.equal(element("checkOut").value, "");
     assert.equal(element("breakList").children.length, 0);
     assert.equal(element("estimateLabel").hidden, false);
@@ -180,6 +184,14 @@ test("tracker updates live estimates every minute without saving checkout", asyn
     assert.equal(element("checkOut").value, "");
     assert.ok(requests.every(request => !request.options.method));
     assert.equal(requests.filter(request => request.url.includes("/entries/")).length, 1);
+    element("previousDay").click();
+    await new Promise(resolve => setImmediate(resolve));
+    assert.equal(element("workDate").value, "2026-10-11");
+    assert.equal(element("goToToday").hidden, false);
+    element("goToToday").click();
+    await new Promise(resolve => setImmediate(resolve));
+    assert.equal(element("workDate").value, "2026-10-12");
+    assert.equal(element("goToToday").hidden, true);
   } finally {
     for (const [key, value] of Object.entries(originals)) {
       if (value === undefined) delete globalThis[key]; else globalThis[key] = value;

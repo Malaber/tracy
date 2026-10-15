@@ -290,3 +290,26 @@ async def test_authentication_gates_web_and_api(unauthenticated_client):
     assert (
         await unauthenticated_client.post("/api/v1/auth/passkey-add/unsupported/options")
     ).status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_reopen_and_resume_preserve_breaks(client):
+    url = "/api/v1/entries/2026-08-12"
+    payload = {"check_in": "08:00", "check_out": "13:00", "breaks": [], "notes": "Preserve"}
+    closed = await client.put(url, json=payload)
+    assert closed.status_code == 200
+    payload["breaks"] = closed.json()["breaks"]
+    payload["check_out"] = None
+    reopened = await client.put(url, json=payload)
+    assert reopened.status_code == 200
+    assert reopened.json()["break_minutes"] == 30
+    assert reopened.json()["exact_minutes"] is None
+    payload["breaks"].append({"mode": "range", "start": "13:00", "end": "14:00"})
+    resumed = await client.put(url, json=payload)
+    assert resumed.status_code == 200
+    assert resumed.json()["break_minutes"] == 90
+    payload["check_out"] = "17:00"
+    finished = await client.put(url, json=payload)
+    assert finished.status_code == 200
+    assert finished.json()["exact_minutes"] == 450
+    assert finished.json()["notes"] == "Preserve"

@@ -10,7 +10,7 @@ import Testing
     #expect(
         EntryPayload(checkIn: "08:00", checkOut: "09:00", breaks: [.init(durationMinutes: 60)])
             .validationMessage != nil)
-    #expect(EntryPayload(checkIn: "08:00", breaks: [.init()]).validationMessage != nil)
+    #expect(EntryPayload(checkIn: "08:00", breaks: [.init()]).validationMessage == nil)
     #expect(
         EntryPayload(
             checkIn: "22:00", checkOut: "06:00", checkOutNextDay: true,
@@ -308,4 +308,37 @@ private actor MockServer: EntrySyncService {
     #expect(projected.projecting(estimate, date: "2026-10-12").summary.exactMinutes == 721)
     #expect(saved.summary.exactMinutes == 480)
     #expect(saved.projecting(estimate, date: "2025-01-01").summary.exactMinutes == 480)
+}
+
+@Test @MainActor func reopenAndRepeatedResume() throws {
+    let closed = EntryPayload(checkIn: "08:00", checkOut: "13:00",
+                              breaks: [.init(durationMinutes: 30)], notes: "Keep")
+    let undo = try closed.reopened()
+    #expect(undo.checkIn == "08:00")
+    #expect(undo.checkOut == nil)
+    #expect(undo.breaks == closed.breaks)
+    #expect(undo.notes == "Keep")
+    var resumed = try closed.reopened(resumeAt: "14:00")
+    #expect(resumed.breaks.count == 2)
+    #expect(resumed.breaks.last?.start == "13:00")
+    #expect(resumed.breaks.last?.end == "14:00")
+    resumed.checkOut = "16:00"
+    resumed = try resumed.reopened(resumeAt: "16:30")
+    #expect(resumed.breaks.count == 3)
+    #expect(try closed.reopened(resumeAt: "13:00").breaks.count == 1)
+    #expect(throws: TracyError.self) { try closed.reopened(resumeAt: "12:00") }
+    #expect(throws: TracyError.self) { try undo.reopened() }
+    var overnight = closed
+    overnight.checkOutNextDay = true
+    #expect(throws: TracyError.self) { try overnight.reopened(resumeAt: "14:00") }
+    let (journal, file) = try journal()
+    defer { try? FileManager.default.removeItem(at: file) }
+    try journal.enqueue(date: "2026-10-15", payload: resumed)
+    let restored = try OfflineJournal(file: file)
+    #expect(restored.entry("2026-10-15").payload == resumed)
+    var entry = restored.entry("2026-10-15")
+    let now = ISO8601DateFormatter().date(from: "2026-10-15T17:00:00Z")!
+    #expect(SignOffEstimate.project(entry, now: now, timezone: "UTC")?.exactMinutes == 420)
+    entry.checkOut = "17:00"
+    #expect(entry.payload.validationMessage == nil)
 }

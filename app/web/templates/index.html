@@ -56,6 +56,8 @@
               <button id="nextDay" class="icon-button" type="button" aria-label="Next day">→</button>
             </div>
 
+            <button id="goToToday" class="secondary-button" type="button" hidden>Go to today</button>
+
             <div id="dayStatus" class="day-status is-empty">
               <span class="status-dot"></span>
               <span>No time saved for this day</span>
@@ -116,6 +118,7 @@
               <p class="eyebrow">Today's result</p>
               <div id="billableHours" class="big-hours">—</div>
               <p class="big-hours-label">billable hours</p>
+              <p id="breakDeduction"></p>
               <p id="estimateLabel" hidden>If you check out now · automatic break when applicable</p>
               <p id="dayProgressText">— / 8 h</p>
               <div id="dayProgressTrack" class="progress-track" role="progressbar" aria-label="8-hour working day" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><span id="dayProgress"></span></div>
@@ -130,7 +133,7 @@
             <section class="card week-card">
               <div class="section-heading-row">
                 <div>
-                  <p class="eyebrow">This week</p>
+                  <p class="eyebrow">This week · billable</p>
                   <h2 id="weekTotal">0 h / 40 h</h2>
                 </div>
                 <span id="weekBalance" class="balance-badge">0 h</span>

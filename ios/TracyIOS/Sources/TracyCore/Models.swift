@@ -73,14 +73,6 @@ public struct EntryPayload: Codable, Equatable, Sendable {
             return checkOut != nil || !breaks.isEmpty ? "Add a check-in first." : nil
         }
         guard let start = Clock.minutes(checkIn) else { return "Choose a valid check-in time." }
-        guard let checkOut else {
-            return breaks.isEmpty ? nil : "Add a check-out before adding breaks."
-        }
-        guard let end = Clock.minutes(checkOut) else { return "Choose a valid check-out time." }
-        let span = end + (checkOutNextDay ? 1440 : 0) - start
-        guard span > 0 else {
-            return "Check-out must be after check-in. For overnight work, turn on Next day."
-        }
         var total = 0
         for item in breaks {
             if item.mode == "duration" {
@@ -97,7 +89,36 @@ public struct EntryPayload: Codable, Equatable, Sendable {
                 total += to - from + (to < from ? 1440 : 0)
             }
         }
+        guard let checkOut else { return nil }
+        guard let end = Clock.minutes(checkOut) else { return "Choose a valid check-out time." }
+        let span = end + (checkOutNextDay ? 1440 : 0) - start
+        guard span > 0 else {
+            return "Check-out must be after check-in. For overnight work, turn on Next day."
+        }
         return total >= span ? "Breaks must be shorter than the working day." : nil
+    }
+
+    /// Reopen the same day's entry, optionally retaining time away as a break.
+    public func reopened(resumeAt: String? = nil) throws -> Self {
+        guard checkIn != nil, let checkout = checkOut, !checkOutNextDay,
+            validationMessage == nil else {
+            throw TracyError.server("Only a completed same-day entry can be reopened.")
+        }
+        var result = self
+        if let resumeAt {
+            guard let end = Clock.minutes(checkout), let resume = Clock.minutes(resumeAt),
+                resume >= end else {
+                throw TracyError.server("Resume time must be at or after checkout.")
+            }
+            if resume > end {
+                result.breaks.append(WorkBreak(mode: "range", durationMinutes: nil,
+                                              start: checkout, end: resumeAt))
+            }
+        }
+        result.checkOut = nil
+        result.checkOutNextDay = false
+        if let message = result.validationMessage { throw TracyError.server(message) }
+        return result
     }
 
     public func applyingDefaultBreak(previous: EntryPayload) -> Self {

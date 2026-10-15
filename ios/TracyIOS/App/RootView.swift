@@ -92,6 +92,12 @@ struct TodayView: View {
                         LayoutCheckedText(headline, key: "headline").font(.largeTitle.bold())
                             .accessibilityAddTraits(.isHeader)
                             .accessibilityHint(subtitle)
+                        if let billable = store.signOffEstimate?.billableMinutes ?? entry.billableMinutes {
+                            LayoutCheckedText("\(Clock.duration(billable)) billable", key: "billable")
+                                .font(.subheadline).accessibilityIdentifier("heroBillable")
+                        }
+                        LayoutCheckedText("\(Clock.duration(store.signOffEstimate?.breakMinutes ?? entry.breakMinutes)) breaks deducted", key: "breaks")
+                            .font(.footnote).accessibilityIdentifier("heroBreaks")
                         let minutes = store.signOffEstimate?.exactMinutes ?? entry.exactMinutes ?? 0
                         let progress = min(1, max(0, Double(minutes) / 480))
                         ProgressView(value: progress) {
@@ -111,6 +117,13 @@ struct TodayView: View {
                             }
                             .modifier(PrimaryActionStyle())
                             .accessibilityIdentifier("quickAction")
+                        } else if !entry.checkOutNextDay {
+                            Button("Resume work") { store.reopenToday(recordGap: true) }
+                                .modifier(PrimaryActionStyle())
+                                .accessibilityIdentifier("resumeWork")
+                            Text("Time since checkout will be added as a break.").font(.footnote)
+                            Button("Undo checkout") { store.reopenToday(recordGap: false) }
+                                .accessibilityIdentifier("undoCheckout")
                         }
                     }
                     .padding(.vertical, 8)
@@ -121,12 +134,6 @@ struct TodayView: View {
                         "Check-out",
                         value: (entry.checkOut ?? "Not entered")
                             + (entry.checkOutNextDay ? " · next day" : ""))
-                    if store.signOffEstimate != nil || !store.isPending(store.today) {
-                        dayValue("Breaks", value: Clock.duration(store.signOffEstimate?.breakMinutes ?? entry.breakMinutes))
-                        if let billable = store.signOffEstimate?.billableMinutes ?? entry.billableMinutes {
-                            dayValue("Billable", value: Clock.duration(billable))
-                        }
-                    }
                     if !entry.notes.isEmpty { Text(entry.notes) }
                     Button {
                         editing = entry
@@ -152,9 +159,9 @@ struct TodayView: View {
                     savedWeek.start <= store.today && store.today <= savedWeek.end {
                     let week = savedWeek.projecting(store.signOffEstimate, date: store.today)
                     Section("This week") {
-                        LabeledContent("Working time", value: Clock.duration(week.summary.exactMinutes))
+                        LabeledContent("Billable time", value: Clock.duration(week.summary.billableMinutes))
                         LabeledContent("Target", value: Clock.duration(week.summary.targetMinutes))
-                        LabeledContent("Balance", value: Clock.duration(week.summary.balanceMinutes))
+                        LabeledContent("Balance", value: Clock.duration(week.summary.billableMinutes - week.summary.targetMinutes))
                         if store.signOffEstimate != nil {
                             Text("Includes live sign-off estimate").font(.footnote).foregroundStyle(.secondary)
                         }

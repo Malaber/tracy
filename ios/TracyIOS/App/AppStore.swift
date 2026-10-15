@@ -172,6 +172,17 @@ final class AppStore: ObservableObject {
         } catch { self.error = error.localizedDescription }
     }
 
+    func reopenToday(recordGap: Bool) {
+        if !isDemo { currentDate = Date() }
+        let current = entry(today)
+        do {
+            let parts = Clock.calendar(timezone: snapshot.timezone).dateComponents([.hour, .minute], from: currentDate)
+            let clock = String(format: "%02d:%02d", parts.hour!, parts.minute!)
+            let payload = try current.payload.reopened(resumeAt: recordGap ? clock : nil)
+            try save(date: today, payload: payload, baseRevision: current.revision)
+        } catch { self.error = error.localizedDescription }
+    }
+
     func resolve(date: String, useLocal: Bool, server: WorkEntry) {
         do {
             try journal?.resolve(date: date, useLocal: useLocal, server: server)
