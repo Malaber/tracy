@@ -52,3 +52,37 @@ private final class ContractProtocol: URLProtocol, @unchecked Sendable {
     #expect(encoded["check_out_next_day"] as? Bool == false)
     #expect(encoded["revision"] == nil)
 }
+
+private final class VacationProtocol: URLProtocol, @unchecked Sendable {
+    override class func canInit(with request: URLRequest) -> Bool { true }
+    override class func canonicalRequest(for request: URLRequest) -> URLRequest { request }
+    override func startLoading() {
+        #expect(request.url?.path == "/api/v1/days-off")
+        #expect(request.value(forHTTPHeaderField: "Authorization") == "Bearer vacation-token")
+        if request.httpMethod == "DELETE" {
+            let query = URLComponents(url: request.url!, resolvingAgainstBaseURL: false)!.queryItems!
+            #expect(query.contains(.init(name: "start", value: "2026-10-15")))
+            #expect(query.contains(.init(name: "end", value: "2026-10-20")))
+        } else {
+            #expect(request.httpMethod == "PUT")
+            #expect(request.value(forHTTPHeaderField: "Content-Type") == "application/json")
+        }
+        let response = HTTPURLResponse(url: request.url!, statusCode: request.httpMethod == "DELETE" ? 204 : 200,
+                                       httpVersion: nil, headerFields: nil)!
+        client?.urlProtocol(self, didReceive: response, cacheStoragePolicy: .notAllowed)
+        client?.urlProtocol(self, didLoad: Data("{}".utf8))
+        client?.urlProtocolDidFinishLoading(self)
+    }
+    override func stopLoading() {}
+}
+
+@Test func vacationUsesExistingAPIWithoutChangingEntry() async throws {
+    let config = URLSessionConfiguration.ephemeral
+    config.protocolClasses = [VacationProtocol.self]
+    let session = URLSession(configuration: config)
+    defer { session.invalidateAndCancel() }
+    let api = TracyAPI(server: URL(string: "https://tracy.example")!, token: "vacation-token", session: session)
+    let range = try VacationRange(start: "2026-10-15", end: "2026-10-20")
+    try await api.setVacation(range, marked: true)
+    try await api.setVacation(range, marked: false)
+}

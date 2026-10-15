@@ -128,6 +128,48 @@ final class AppStore: ObservableObject {
         } catch { self.error = error.localizedDescription }
     }
 
+    var notificationAccount: String? {
+        guard let credential else { return nil }
+        return SHA256.hash(data: Data("\(credential.server.absoluteString)|\(credential.userID)".utf8))
+            .map { String(format: "%02x", $0) }.joined()
+    }
+
+    var reminderEntry: WorkEntry {
+        if entry(today).checkIn != nil { return entry(today) }
+        let yesterday = Clock.calendar(timezone: snapshot.timezone).date(byAdding: .day, value: -1, to: currentDate)!
+        let previous = entry(Clock.day(yesterday, timezone: snapshot.timezone))
+        return previous.checkOut == nil ? previous : entry(today)
+    }
+
+    var reminderKey: String {
+        let payload = (try? TracyAPI.encode(reminderEntry)) ?? Data()
+        return (notificationAccount ?? "") + snapshot.timezone + payload.base64EncodedString()
+    }
+
+    func setVacation(start: String, end: String, marked: Bool) async throws {
+        let range = try VacationRange(start: start, end: end)
+        guard let journal else { throw TracyError.server("Sign in to manage vacation.") }
+        if !isDemo {
+            guard isOnline, !needsSignIn, let api else {
+                throw TracyError.server("Connect to Tracy to save vacation.")
+            }
+            try await api.setVacation(range, marked: marked)
+        }
+        let calendar = Clock.calendar(timezone: "UTC")
+        var cursor = WorkdayDates.date(range.start, timezone: "UTC")!
+        var entries: [WorkEntry] = []
+        while Clock.day(cursor, timezone: "UTC") <= range.end {
+            let day = Clock.day(cursor, timezone: "UTC")
+            var updated = snapshot.entries[day] ?? .empty(date: day)
+            updated.isDayOff = marked
+            entries.append(updated)
+            cursor = calendar.date(byAdding: .day, value: 1, to: cursor)!
+        }
+        try journal.cache(entries: entries)
+        snapshot = journal.snapshot
+        await refresh()
+    }
+
     func entry(_ date: String) -> WorkEntry { journal?.entry(date) ?? .empty(date: date) }
     func isPending(_ date: String) -> Bool { snapshot.pending.contains { $0.date == date } }
     func conflict(_ date: String) -> WorkEntry? {

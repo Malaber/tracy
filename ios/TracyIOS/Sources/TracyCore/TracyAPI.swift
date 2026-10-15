@@ -109,6 +109,16 @@ public struct TracyAPI: Sendable {
                 headers: ["If-Match": revision, "Idempotency-Key": mutationID.uuidString]))
     }
 
+    public func setVacation(_ range: VacationRange, marked: Bool) async throws {
+        if marked {
+            _ = try await data("days-off", method: "PUT", body: Self.encode(range))
+        } else {
+            _ = try await data("days-off", method: "DELETE", query: [
+                .init(name: "start", value: range.start), .init(name: "end", value: range.end),
+            ])
+        }
+    }
+
     public func statistics(period: String = "custom", anchor: String, start: String? = nil) async throws
         -> Statistics
     {

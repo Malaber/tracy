@@ -199,6 +199,38 @@ final class TracyUITests: XCTestCase {
     }
 
     @MainActor
+    func testVacationFromTodayAndEntryEditor() {
+        let app = XCUIApplication()
+        app.launchArguments = testArguments
+        app.launch()
+        defer { app.terminate() }
+        XCTAssertTrue(app.buttons["manageVacation"].waitForExistence(timeout: 15))
+        app.buttons["manageVacation"].tap()
+        XCTAssertTrue(app.buttons["saveVacation"].waitForExistence(timeout: 10))
+        app.buttons["saveVacation"].tap()
+        XCTAssertTrue(app.buttons["editToday"].waitForExistence(timeout: 10))
+        app.buttons["editToday"].tap()
+        XCTAssertTrue(app.buttons["entryVacation"].waitForExistence(timeout: 10))
+        XCTAssertEqual(app.buttons["entryVacation"].label, "Manage vacation")
+        XCTAssertFalse(app.staticTexts["Saved on this device first"].exists)
+        app.buttons["entryVacation"].tap()
+        XCTAssertTrue(app.buttons["saveVacation"].waitForExistence(timeout: 10))
+    }
+
+    @MainActor
+    func testNotificationOpensCheckoutCorrection() {
+        let app = XCUIApplication()
+        app.launchArguments = testArguments + ["--ui-notification-checkout"]
+        app.launchEnvironment["TRACY_UI_JOURNAL"] = UUID().uuidString
+        app.launch()
+        defer { app.terminate() }
+        XCTAssertTrue(app.buttons["applyActualCheckout"].waitForExistence(timeout: 15))
+        app.buttons["applyActualCheckout"].tap()
+        app.buttons["saveEntry"].tap()
+        XCTAssertTrue(app.buttons["resumeWork"].waitForExistence(timeout: 10))
+    }
+
+    @MainActor
     func testAppearanceAndAccessibility() throws {
         let app = XCUIApplication()
         app.launchArguments = [

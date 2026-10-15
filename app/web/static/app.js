@@ -74,7 +74,7 @@ export function projectEntry(entry, { date, clock }, rounding = 15) {
   const end = parseClock(clock);
   if (end < start) return null;
   if (end === start) return { exact: 0, billable: 0, breakMinutes: 0 };
-  const breaks = entry.breaks.length || end - start <= 270
+  const breaks = entry.breaks.length || end - start <= 360
     ? entry.breaks : [{ mode: "duration", duration_minutes: 30 }];
   return calculateDraft({ checkIn: entry.check_in, checkOut: clock, nextDay: false, breaks, rounding });
 }
@@ -127,7 +127,7 @@ export function needsDefaultBreak({ checkIn, checkOut, nextDay, breaks, saved })
   try {
     const start = parseClock(checkIn);
     const end = parseClock(checkOut);
-    return end + (nextDay ? 1440 : 0) - start > 4 * 60 + 30;
+    return end + (nextDay ? 1440 : 0) - start > 6 * 60;
   } catch {
     return false;
   }

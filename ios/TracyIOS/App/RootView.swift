@@ -4,6 +4,8 @@ import TracyCore
 struct RootView: View {
     @EnvironmentObject private var store: AppStore
     @Environment(\.scenePhase) private var scenePhase
+    @EnvironmentObject private var notifications: WorkdayNotifications
+    @AppStorage("workdayReminders") private var remindersEnabled = false
 
     var body: some View {
         Group {
@@ -18,6 +20,15 @@ struct RootView: View {
                 }
             }
         }
+        .task(id: store.reminderKey + String(remindersEnabled) + String(describing: scenePhase)) {
+            if !store.isDemo {
+                await notifications.synchronize(entry: store.reminderEntry, timezone: store.snapshot.timezone,
+                                                account: store.notificationAccount, enabled: remindersEnabled)
+            }
+        }
+        .sheet(item: $notifications.checkoutRequest) { request in
+            NotificationCheckoutView(request: request)
+        }
         .alert(
             "Tracy", isPresented: Binding(get: { store.error != nil }, set: { if !$0 { store.error = nil } })
         ) {
@@ -27,7 +38,15 @@ struct RootView: View {
         }
         .task {
             await store.refresh()
-            if store.isDemo { return }
+            if store.isDemo {
+                #if DEBUG
+                if ProcessInfo.processInfo.arguments.contains("--ui-notification-checkout"),
+                    let account = store.notificationAccount {
+                    notifications.openCheckout(day: store.today, account: account)
+                }
+                #endif
+                return
+            }
             while !Task.isCancelled {
                 do { try await Task.sleep(for: .seconds(60)) } catch { return }
                 if scenePhase == .active { await store.refresh() }
@@ -72,6 +91,7 @@ struct SyncStatus: View {
 struct TodayView: View {
     @EnvironmentObject private var store: AppStore
     @State private var editing: WorkEntry?
+    @State private var showVacation = false
     private var entry: WorkEntry { store.entry(store.today) }
 
     var body: some View {
@@ -184,6 +204,13 @@ struct TodayView: View {
             }
             .modifier(ReadableScrollEdge())
             .navigationTitle("Today")
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button("Vacation", systemImage: "calendar.badge.plus") { showVacation = true }
+                        .accessibilityIdentifier("manageVacation")
+                }
+            }
+            .sheet(isPresented: $showVacation) { VacationEditor(initialDay: store.today) }
             .refreshable { await store.refresh() }
             .sheet(item: $editing) { EntryEditor(entry: $0) }
         }

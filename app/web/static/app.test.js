@@ -63,10 +63,10 @@ test("new long days get a default break", () => {
     checkIn: "8", checkOut: "12:30", nextDay: false, breaks: [], saved: false,
   }), false);
   assert.equal(needsDefaultBreak({
-    checkIn: "8", checkOut: "12:31", nextDay: false, breaks: [], saved: false,
+    checkIn: "8", checkOut: "14:01", nextDay: false, breaks: [], saved: false,
   }), true);
   assert.equal(needsDefaultBreak({
-    checkIn: "22", checkOut: "03:00", nextDay: true, breaks: [], saved: false,
+    checkIn: "22", checkOut: "04:01", nextDay: true, breaks: [], saved: false,
   }), true);
   assert.equal(needsDefaultBreak({
     checkIn: "8", checkOut: "17", nextDay: false,
@@ -107,7 +107,9 @@ test("live sign-off applies default breaks, rounding and date guards without mut
   const now = clock => ({ date: entry.date, clock });
   assert.deepEqual(projectEntry(entry, now("08:00")), { exact: 0, billable: 0, breakMinutes: 0 });
   assert.equal(projectEntry(entry, now("12:30")).exact, 270);
-  assert.deepEqual(projectEntry(entry, now("12:31")), { exact: 241, billable: 255, breakMinutes: 30 });
+  assert.equal(projectEntry(entry, now("12:59")).breakMinutes, 0);
+  assert.equal(projectEntry(entry, now("14:00")).exact, 360);
+  assert.deepEqual(projectEntry(entry, now("14:01")), { exact: 331, billable: 345, breakMinutes: 30 });
   assert.equal(projectEntry(entry, now("16:31"), 1).billable, 481);
   assert.equal(projectEntry(entry, now("07:59")), null);
   assert.equal(projectEntry(entry, { date: "2026-10-13", clock: "09:00" }), null);
@@ -142,7 +144,7 @@ test("tracker updates live estimates every minute without saving checkout", asyn
   const html = await fs.readFile(new URL("../templates/index.html", import.meta.url), "utf8");
   const dom = new JSDOM(html, { url: "https://tracy.example" });
   const originals = Object.fromEntries(["document", "location", "fetch", "Date", "setInterval"].map(key => [key, globalThis[key]]));
-  let now = "2026-10-12T12:31:00Z";
+  let now = "2026-10-12T14:01:00Z";
   let tick;
   const requests = [];
   const entry = { date: "2026-10-12", saved: true, check_in: "08:00", check_out: null, breaks: [], status: "in_progress" };
@@ -165,11 +167,11 @@ test("tracker updates live estimates every minute without saving checkout", asyn
     for (let i = 0; i < 100 && !tick; i++) await new Promise(resolve => setImmediate(resolve));
     assert.equal(typeof tick, "function");
     const element = id => document.getElementById(id);
-    assert.equal(element("billableHours").textContent, "4.25");
-    assert.equal(element("weekTotal").textContent, "4.25 h / 40.00 h");
-    assert.equal(element("weekBalance").textContent, "−35.75 h");
-    assert.equal(element("weekProgress").style.width, "10.625%");
-    assert.equal(element("recentDays").querySelector("strong").textContent, "4.25 h");
+    assert.equal(element("billableHours").textContent, "5.75");
+    assert.equal(element("weekTotal").textContent, "5.75 h / 40.00 h");
+    assert.equal(element("weekBalance").textContent, "−34.25 h");
+    assert.ok(Math.abs(parseFloat(element("weekProgress").style.width) - 14.375) < 0.000001);
+    assert.equal(element("recentDays").querySelector("strong").textContent, "5.75 h");
     assert.equal(element("breakDeduction").textContent, "0 h 30 min breaks deducted");
     assert.equal(element("checkOut").value, "");
     assert.equal(element("breakList").children.length, 0);

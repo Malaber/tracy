@@ -57,6 +57,9 @@ struct SignInView: View {
 
 struct SettingsView: View {
     @EnvironmentObject private var store: AppStore
+    @EnvironmentObject private var notifications: WorkdayNotifications
+    @AppStorage("workdayReminders") private var remindersEnabled = false
+    @State private var requestingNotifications = false
     @AppStorage("appearance") private var appearance = "system"
     @State private var confirmSignOut = false
     @State private var confirmDeletion = false
@@ -73,6 +76,30 @@ struct SettingsView: View {
                     }
                     .pickerStyle(.menu)
                     .accessibilityIdentifier("appearancePicker")
+                }
+                Section("Workday reminders") {
+                    Toggle("Break and checkout reminders", isOn: Binding(
+                        get: { remindersEnabled },
+                        set: { enabled in
+                            if !enabled { remindersEnabled = false; return }
+                            requestingNotifications = true
+                            Task {
+                                remindersEnabled = await notifications.enable()
+                                requestingNotifications = false
+                            }
+                        }))
+                        .disabled(requestingNotifications)
+                        .accessibilityIdentifier("workdayReminders")
+                    Text("A break reminder after six hours and a checkout reminder after eight working hours. Tap either to correct your actual checkout time.")
+                        .font(.footnote)
+                    if notifications.permissionDenied {
+                        Text("Notifications are disabled in iOS Settings.")
+                        Link("Open notification settings", destination: URL(string: UIApplication.openSettingsURLString)!)
+                    }
+                    if let error = notifications.error { Text(error).foregroundStyle(.red) }
+                }
+                Section("Vacation") {
+                    NavigationLink("Manage vacation") { VacationEditor(initialDay: store.today) }
                 }
                 Section("Sync") {
                     LabeledContent("Waiting to sync", value: "\(store.pendingCount) days")

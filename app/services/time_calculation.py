@@ -6,7 +6,7 @@ from typing import Any
 
 TIME_PATTERN = re.compile(r"^(\d{1,2}):(\d{2})$")
 DECIMAL_PATTERN = re.compile(r"^\d{1,2}(?:[.,]\d+)?$")
-DEFAULT_BREAK_THRESHOLD_MINUTES = 4 * 60 + 30
+DEFAULT_BREAK_THRESHOLD_MINUTES = 6 * 60
 DEFAULT_BREAK_MINUTES = 30
 
 

@@ -49,8 +49,10 @@ def test_calculate_complete_workday_with_both_break_types():
 
 def test_default_break_applies_only_to_long_days_without_breaks():
     assert not needs_default_break(480, 750, False, [])
-    assert needs_default_break(480, 751, False, [])
-    assert needs_default_break(1320, 180, True, [])
+    assert not needs_default_break(480, 779, False, [])
+    assert not needs_default_break(480, 840, False, [])
+    assert needs_default_break(480, 841, False, [])
+    assert needs_default_break(1320, 241, True, [])
     assert not needs_default_break(480, 1020, False, [{"mode": "duration"}])
     assert not needs_default_break(None, 1020, False, [])
 

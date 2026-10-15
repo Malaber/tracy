@@ -125,7 +125,7 @@ public struct EntryPayload: Codable, Equatable, Sendable {
         guard previous.checkIn == nil || previous.checkOut == nil,
             breaks.isEmpty, let start = checkIn.flatMap(Clock.minutes),
             let end = checkOut.flatMap(Clock.minutes),
-            end + (checkOutNextDay ? 1440 : 0) - start > 270
+            end + (checkOutNextDay ? 1440 : 0) - start > 360
         else { return self }
         var result = self
         result.breaks = [WorkBreak(durationMinutes: 30)]

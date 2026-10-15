@@ -12,8 +12,10 @@
 		4D7EF413837943296DDB362E /* AppIcon.icon in Resources */ = {isa = PBXBuildFile; fileRef = 763F0A35622A95792A596D6C /* AppIcon.icon */; };
 		57BAE984DF1870ADFF8336EA /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 6D5E4CBED1AD90C16D148AE0 /* Assets.xcassets */; };
 		598AF216C11195D5A5072224 /* EntryEditor.swift in Sources */ = {isa = PBXBuildFile; fileRef = C983F527A8764079A8A2EAFF /* EntryEditor.swift */; };
+		5BC9441E9E4721F7E4055F35 /* VacationEditor.swift in Sources */ = {isa = PBXBuildFile; fileRef = E2162B98F00E69B3F6397F19 /* VacationEditor.swift */; };
 		65589C874754D43DF0A592E6 /* TracyUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8CE178044A01404A4969F5BE /* TracyUITests.swift */; };
 		7F41B341D99E38A04D047E7D /* Authentication.swift in Sources */ = {isa = PBXBuildFile; fileRef = 15B1267AAD0731C3290E34C0 /* Authentication.swift */; };
+		923966D03F2C27BF0E4DE9AA /* WorkdayNotifications.swift in Sources */ = {isa = PBXBuildFile; fileRef = E74D79E827E26A7216524491 /* WorkdayNotifications.swift */; };
 		9EF6949C12F5DFC3173C98CE /* AppStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = FC46A697DE72816095362688 /* AppStore.swift */; };
 		C70D4EC4276438E85636DE24 /* RootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C33D5B25355F68F0BC190404 /* RootView.swift */; };
 		D4D75DEBCCFE382190236258 /* MarketingScreenshots.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9DB381EE7738E6B22966F13A /* MarketingScreenshots.swift */; };
@@ -57,6 +59,8 @@
 		C33D5B25355F68F0BC190404 /* RootView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RootView.swift; sourceTree = "<group>"; };
 		C91E53FABCF034848B321B58 /* TracyIOS */ = {isa = PBXFileReference; lastKnownFileType = folder; name = TracyIOS; path = .; sourceTree = SOURCE_ROOT; };
 		C983F527A8764079A8A2EAFF /* EntryEditor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EntryEditor.swift; sourceTree = "<group>"; };
+		E2162B98F00E69B3F6397F19 /* VacationEditor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VacationEditor.swift; sourceTree = "<group>"; };
+		E74D79E827E26A7216524491 /* WorkdayNotifications.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkdayNotifications.swift; sourceTree = "<group>"; };
 		FC46A697DE72816095362688 /* AppStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppStore.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
@@ -133,6 +137,8 @@
 				C33D5B25355F68F0BC190404 /* RootView.swift */,
 				93589588D442ED5BA4AD47F8 /* SecondaryViews.swift */,
 				10D5BE15721AC2D1F2D61B97 /* TracyApp.swift */,
+				E2162B98F00E69B3F6397F19 /* VacationEditor.swift */,
+				E74D79E827E26A7216524491 /* WorkdayNotifications.swift */,
 			);
 			path = App;
 			sourceTree = "<group>";
@@ -291,6 +297,8 @@
 				C70D4EC4276438E85636DE24 /* RootView.swift in Sources */,
 				EF914E5CDABADD43F6D9D135 /* SecondaryViews.swift in Sources */,
 				259AD5AD43EAFB21CE9E7247 /* TracyApp.swift in Sources */,
+				5BC9441E9E4721F7E4055F35 /* VacationEditor.swift in Sources */,
+				923966D03F2C27BF0E4DE9AA /* WorkdayNotifications.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

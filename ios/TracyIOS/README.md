@@ -33,7 +33,7 @@ warnings. Completed means an entry is present; it does not assert that its hours
 **Statistics** shows server-calculated exact/billable time and full-period targets.
 
 Forms support time pickers, overnight checkout, multiple duration/range breaks, and notes.
-When first completing a span longer than 4½ hours with no breaks, the same 30-minute default break
+When first completing a span longer than six hours with no breaks, the same 30-minute default break
 as the web app is added. It remains visible and editable, including while offline.
 
 System, light, and dark appearance are available in Settings. The app uses semantic colors,
@@ -149,3 +149,22 @@ that runtime and pass its ID to `inv check-ios-ui --destination='platform=iOS Si
 matching CI's isolated installation of the unsigned app/test runner.
 A missing/mismatched build fails setup instead of silently
 running another toolchain. The hosted machine's hardware and macOS may still differ.
+
+### Workday reminders and vacation
+
+Enable break and checkout reminders in Settings. Local reminders follow the server timezone:
+a default-break reminder after six hours (at minute 361), and a reminder after eight net
+working hours. Explicit breaks replace the default deduction. Editing, resuming, or
+checking out updates scheduled reminders; signing out cancels them. Notification delivery
+depends on iOS notification permissions and Focus settings. Changes made on another
+device are reflected after this app syncs.
+
+Tap a reminder or its Review checkout action to open the original entry. Choose the
+actual checkout date and time, apply it, and save. The date can be the entry's day or
+the following day, matching the existing overnight-entry model. The reminder never
+silently saves a checkout.
+
+Vacation is available from Today's toolbar, Settings, and Edit entry. Choose a date
+or range to mark or remove vacation. Saving requires a connection; it preserves
+recorded working time and any entry draft. Existing saved breaks are not rewritten
+by the six-hour threshold change.
