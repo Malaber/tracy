@@ -10,6 +10,7 @@ from app.services.time_calculation import calculate_work_minutes, parse_clock_ti
 
 
 class BreakPayload(BaseModel):
+    automatic: bool = False
     mode: Literal["duration", "range"]
     duration_minutes: int | None = Field(default=None, ge=1, le=1440)
     start: str | None = None
@@ -34,10 +35,33 @@ class BreakPayload(BaseModel):
     def normalized(self) -> dict[str, int | str | None]:
         return {
             "mode": self.mode,
+            "automatic": self.automatic,
             "duration_minutes": self.duration_minutes,
             "start_minutes": parse_clock_time(self.start),
             "end_minutes": parse_clock_time(self.end),
         }
+
+
+class ProjectPayload(BaseModel):
+    name: str = Field(min_length=1, max_length=120)
+    archived: bool = False
+
+    @field_validator("name")
+    @classmethod
+    def clean_name(cls, value: str) -> str:
+        value = value.strip()
+        if not value:
+            raise ValueError("Enter a project name.")
+        return value
+
+
+class DefaultProjectPayload(BaseModel):
+    project_id: int | None = Field(default=None, gt=0)
+
+
+class ProjectAllocation(BaseModel):
+    project_id: int = Field(gt=0)
+    minutes: int = Field(gt=0, le=2880)
 
 
 class WorkEntryPayload(BaseModel):
@@ -45,6 +69,8 @@ class WorkEntryPayload(BaseModel):
     check_out: str | None = None
     check_out_next_day: bool = False
     breaks: list[BreakPayload] = Field(default_factory=list, max_length=20)
+    project_allocations: list[ProjectAllocation] | None = Field(default=None, max_length=50)
+    default_project_id: int | None = Field(default=None, gt=0)
     notes: str = Field(default="", max_length=2000)
 
     @field_validator("check_in", "check_out")
@@ -57,6 +83,13 @@ class WorkEntryPayload(BaseModel):
 
     @model_validator(mode="after")
     def validate_calculation(self) -> "WorkEntryPayload":
+        start, end = parse_clock_time(self.check_in), parse_clock_time(self.check_out)
+        if (
+            start is not None
+            and end is not None
+            and end + (1440 if self.check_out_next_day else 0) - start <= 360
+        ):
+            self.breaks = [item for item in self.breaks if not item.automatic]
         calculate_work_minutes(
             parse_clock_time(self.check_in),
             parse_clock_time(self.check_out),

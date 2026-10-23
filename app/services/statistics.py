@@ -44,6 +44,7 @@ def build_statistics(
     weekly: dict[date, dict[str, int]] = defaultdict(
         lambda: {"exact_minutes": 0, "billable_minutes": 0, "target_minutes": 0}
     )
+    project_totals: dict[int, int] = defaultdict(int)
     total_exact = 0
     total_billable = 0
     target_minutes = 0
@@ -77,6 +78,9 @@ def build_statistics(
             completed_days += 1
         total_exact += exact
         total_billable += billable
+        if entry.get("status") == "complete":
+            for booking in entry.get("project_bookings", []):
+                project_totals[booking["project_id"]] += booking["minutes"]
 
         week_start = current - timedelta(days=current.weekday())
         weekly[week_start]["exact_minutes"] += exact
@@ -93,7 +97,7 @@ def build_statistics(
                 "expected_minutes": expected,
                 "exact_minutes": exact,
                 "billable_minutes": billable,
-                "balance_minutes": exact - expected,
+                "balance_minutes": billable - expected,
                 "status": entry.get("status", "empty"),
                 "notes": entry.get("notes", ""),
             }
@@ -104,6 +108,9 @@ def build_statistics(
     return {
         "start": start.isoformat(),
         "end": end.isoformat(),
+        "project_totals": [
+            {"project_id": key, "minutes": value} for key, value in sorted(project_totals.items())
+        ],
         "summary": {
             "calendar_days": calendar_days,
             "expected_workdays": expected_workdays,
@@ -114,11 +121,11 @@ def build_statistics(
             "exact_minutes": total_exact,
             "billable_minutes": total_billable,
             "target_minutes": target_minutes,
-            "balance_minutes": total_exact - target_minutes,
+            "balance_minutes": total_billable - target_minutes,
             "completion_percent": (
-                round(total_exact / target_minutes * 100, 1) if target_minutes else 0
+                round(total_billable / target_minutes * 100, 1) if target_minutes else 0
             ),
-            "average_minutes": round(total_exact / completed_days) if completed_days else 0,
+            "average_minutes": round(total_billable / completed_days) if completed_days else 0,
         },
         "weeks": [
             {"week_start": week.isoformat(), **values} for week, values in sorted(weekly.items())

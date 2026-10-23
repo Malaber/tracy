@@ -75,7 +75,7 @@ async def test_entry_lifecycle_and_statistics(client):
         'attachment; filename="tracy-2026-07-13-2026-07-19.csv"'
         == exported.headers["content-disposition"]
     )
-    assert "2026-07-17,Friday,Working day,8.42,8.50,8.00,0.42,Invoice preparation" in exported.text
+    assert "2026-07-17,Friday,Working day,8.42,8.50,8.00,0.50,Invoice preparation" in exported.text
 
     assert (await client.delete(f"/api/v1/entries/{work_date}")).status_code == 204
     assert (await client.get(f"/api/v1/entries/{work_date}")).json()["saved"] is False

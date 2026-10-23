@@ -199,6 +199,108 @@ final class TracyUITests: XCTestCase {
     }
 
     @MainActor
+    func testBreakRemovalPersistsAndSupportsSwipeAndZero() {
+        let app = XCUIApplication()
+        app.launchArguments = testArguments
+        app.launchEnvironment["TRACY_UI_JOURNAL"] = UUID().uuidString
+        app.launch()
+        defer { app.terminate() }
+        XCTAssertTrue(app.buttons["quickAction"].waitForExistence(timeout: 15))
+        app.buttons["quickAction"].tap()
+        XCTAssertTrue(app.buttons["editToday"].waitForExistence(timeout: 10))
+        app.buttons["editToday"].tap()
+        let form = app.descendants(matching: .any).matching(identifier: "entryForm").firstMatch
+        func reveal(_ element: XCUIElement) {
+            for _ in 0..<8 {
+                if element.exists && element.isHittable { return }
+                form.swipeUp()
+            }
+            XCTAssertTrue(element.isHittable)
+        }
+        let remove = app.buttons["removeBreak1"]
+        reveal(remove)
+        remove.tap()
+        XCTAssertTrue(remove.waitForNonExistence(timeout: 5))
+        app.buttons["saveEntry"].tap()
+        XCTAssertTrue(app.staticTexts["heroBreaks"].waitForExistence(timeout: 5))
+        XCTAssertEqual(app.staticTexts["heroBreaks"].label, "0h 0m breaks deducted")
+        app.terminate()
+        app.launch()
+        XCTAssertTrue(app.buttons["editToday"].waitForExistence(timeout: 15))
+        app.buttons["editToday"].tap()
+        let add = app.buttons["Add break"]
+        reveal(add)
+        XCTAssertTrue(remove.waitForNonExistence(timeout: 5))
+        add.tap()
+        reveal(add)
+        add.tap()
+        reveal(app.buttons["removeBreak2"])
+        app.buttons["removeBreak2"].swipeLeft()
+        app.buttons["Delete"].tap()
+        XCTAssertTrue(app.buttons["removeBreak2"].waitForNonExistence(timeout: 5))
+        let duration = app.steppers["breakDuration1"]
+        reveal(duration)
+        XCTAssertEqual(duration.value as? String, "30 minutes")
+        for _ in 0..<30 { duration.buttons["breakDuration1-Decrement"].tap() }
+        XCTAssertTrue(app.buttons["Remove break"].waitForExistence(timeout: 3))
+        app.buttons.matching(identifier: "Cancel").allElementsBoundByIndex.last!.tap()
+        XCTAssertEqual(duration.value as? String, "1 minutes")
+        duration.buttons["breakDuration1-Decrement"].tap()
+        app.buttons["Remove break"].tap()
+        XCTAssertTrue(remove.waitForNonExistence(timeout: 5))
+        app.buttons["saveEntry"].tap()
+        XCTAssertTrue(app.staticTexts["heroBreaks"].waitForExistence(timeout: 5))
+        XCTAssertEqual(app.staticTexts["heroBreaks"].label, "0h 0m breaks deducted")
+        app.terminate()
+        app.launch()
+        XCTAssertTrue(app.buttons["editToday"].waitForExistence(timeout: 15))
+        app.buttons["editToday"].tap()
+        reveal(add)
+        XCTAssertTrue(remove.waitForNonExistence(timeout: 5))
+    }
+
+    @MainActor
+    func testProjectBookingPersistsAndProjectArchiveRestores() {
+        let app = XCUIApplication()
+        app.launchArguments = testArguments + ["--ui-projects"]
+        app.launchEnvironment["TRACY_UI_JOURNAL"] = UUID().uuidString
+        app.launch()
+        defer { app.terminate() }
+        XCTAssertTrue(app.buttons["editToday"].waitForExistence(timeout: 15))
+        app.buttons["editToday"].tap()
+        let form = app.descendants(matching: .any).matching(identifier: "entryForm").firstMatch
+        let add = app.buttons["addProjectBooking"]
+        for _ in 0..<8 {
+            if add.exists && add.isHittable { break }
+            form.swipeUp()
+        }
+        add.tap()
+        XCTAssertTrue(app.textFields["Booking minutes"].waitForExistence(timeout: 5))
+        XCTAssertEqual(app.textFields["Booking minutes"].value as? String, "120")
+        app.buttons["saveEntry"].tap()
+        app.terminate()
+        app.launch()
+        XCTAssertTrue(app.buttons["editToday"].waitForExistence(timeout: 15))
+        app.buttons["editToday"].tap()
+        for _ in 0..<8 {
+            if app.textFields["Booking minutes"].exists && app.textFields["Booking minutes"].isHittable { break }
+            form.swipeUp()
+        }
+        XCTAssertEqual(app.textFields["Booking minutes"].value as? String, "120")
+        app.buttons["saveEntry"].tap()
+        app.buttons["Settings"].firstMatch.tap()
+        app.buttons["Projects"].tap()
+        let archive = app.buttons["projectArchive1"]
+        XCTAssertTrue(archive.waitForExistence(timeout: 10))
+        archive.tap()
+        XCTAssertEqual(archive.label, "Unarchive")
+        archive.tap()
+        XCTAssertEqual(archive.label, "Archive")
+        app.buttons["projectDefault1"].tap()
+        XCTAssertTrue(app.staticTexts["Default project"].waitForExistence(timeout: 5))
+    }
+
+    @MainActor
     func testVacationFromTodayAndEntryEditor() {
         let app = XCUIApplication()
         app.launchArguments = testArguments

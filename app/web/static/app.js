@@ -44,6 +44,7 @@ export function calculateDraft({ checkIn, checkOut, nextDay, breaks, rounding })
   if (span <= 0) throw new Error("Check-out must be later than check-in.");
   let breakMinutes = 0;
   for (const item of breaks) {
+    if (item.automatic && span <= 360) continue;
     if (item.mode === "duration") {
       const duration = Number(item.duration_minutes);
       if (!Number.isInteger(duration) || duration <= 0) {
@@ -92,13 +93,13 @@ export function projectStatistics(data, entry, projection) {
   const billableDelta = projection.billable - day.billable_minutes;
   day.exact_minutes = projection.exact;
   day.billable_minutes = projection.billable;
-  day.balance_minutes += exactDelta;
+  day.balance_minutes += billableDelta;
   day.status = "in_progress";
   result.summary.exact_minutes += exactDelta;
   result.summary.billable_minutes += billableDelta;
-  result.summary.balance_minutes += exactDelta;
+  result.summary.balance_minutes += billableDelta;
   result.summary.completion_percent = result.summary.target_minutes
-    ? result.summary.exact_minutes / result.summary.target_minutes * 100 : 0;
+    ? result.summary.billable_minutes / result.summary.target_minutes * 100 : 0;
   for (const week of result.weeks ?? []) {
     if (entry.date >= week.week_start && entry.date <= shiftDate(week.week_start, 6)) {
       week.exact_minutes += exactDelta;
@@ -210,6 +211,7 @@ async function api(path, options = {}) {
 const state = {
   currentDate: localISODate(),
   entry: null,
+  projects: { projects: [], default_project_id: null },
   todayEntry: null,
   weekData: null,
   statisticsData: null,
@@ -272,6 +274,7 @@ function setDayStatus(status, isDayOff = false) {
 function addBreakRow(item = { mode: "duration", duration_minutes: 30, start: "", end: "" }) {
   const row = document.createElement("div");
   row.className = "break-row";
+  row.dataset.automatic = String(Boolean(item.automatic));
   row.innerHTML = `
     <select class="break-mode" aria-label="Break entry type">
       <option value="duration">Duration</option>
@@ -291,9 +294,10 @@ function addBreakRow(item = { mode: "duration", duration_minutes: 30, start: "",
       values.className = "break-values range-inputs";
       values.innerHTML = `<input class="break-start" type="time" step="60" aria-label="Break start" value="${escapeHtml(item.start ?? "")}"><input class="break-end" type="time" step="60" aria-label="Break end" value="${escapeHtml(item.end ?? "")}">`;
     }
-    values.querySelectorAll("input").forEach((input) => input.addEventListener("input", updateLiveSummary));
+    values.querySelectorAll("input").forEach((input) => input.addEventListener("input", () => { row.dataset.automatic = "false"; updateLiveSummary(); }));
   };
   mode.addEventListener("change", () => {
+    row.dataset.automatic = "false";
     item = { mode: mode.value, duration_minutes: 30, start: "", end: "" };
     renderFields();
     updateLiveSummary();
@@ -317,7 +321,7 @@ function collectBreaks() {
   return [...byId("breakList").querySelectorAll(".break-row")].map((row) => {
     const mode = row.querySelector(".break-mode").value;
     if (mode === "duration") {
-      return { mode, duration_minutes: Number(row.querySelector(".break-duration").value) };
+      return { mode, automatic: row.dataset.automatic === "true", duration_minutes: Number(row.querySelector(".break-duration").value) };
     }
     return {
       mode,
@@ -335,20 +339,27 @@ function collectDraft() {
     check_out_next_day: byId("nextDayCheckout").checked,
     breaks: collectBreaks(),
     notes: byId("notes").value,
+    default_project_id: Number(byId("dayProject").value) || null,
+    project_allocations: collectBookings(),
   };
 }
 
 function updateLiveSummary() {
   try {
     let draft = collectDraft();
+    if (draft.check_in && draft.check_out && parseClock(draft.check_out) + (draft.check_out_next_day ? 1440 : 0) - parseClock(draft.check_in) <= 360) {
+      byId("breakList").querySelectorAll('[data-automatic="true"]').forEach(row => row.remove());
+      updateEmptyBreaks();
+      draft = collectDraft();
+    }
     if (needsDefaultBreak({
       checkIn: draft.check_in,
       checkOut: draft.check_out,
       nextDay: draft.check_out_next_day,
       breaks: draft.breaks,
-      saved: state.entry?.saved,
+      saved: Boolean(state.entry?.saved && state.entry?.check_in && state.entry?.check_out),
     })) {
-      addBreakRow();
+      addBreakRow({ mode: "duration", duration_minutes: 30, automatic: true });
       draft = collectDraft();
     }
     const projection = projectEntry({ ...draft, date: state.currentDate }, serverNow(), state.preferences.rounding_minutes);
@@ -360,11 +371,11 @@ function updateLiveSummary() {
       rounding: state.preferences.rounding_minutes,
     });
     byId("estimateLabel").hidden = !projection;
-    const progress = dayProgress(calculated.exact);
+    const progress = dayProgress(calculated.billable);
     byId("dayProgress").style.width = `${progress.percent}%`;
     byId("dayProgress").style.background = progress.color;
     byId("dayProgressTrack").setAttribute("aria-valuenow", String(progress.percent));
-    byId("dayProgressText").textContent = `${formatDuration(calculated.exact)} / 8 h`;
+    byId("dayProgressText").textContent = `${formatDuration(calculated.billable)} / 8 h billable`;
     byId("billableHours").textContent = calculated.billable == null
       ? "—"
       : (calculated.billable / 60).toFixed(2);
@@ -375,6 +386,11 @@ function updateLiveSummary() {
     byId("breakDeduction").textContent = calculated.exact == null ? "" : `${formatDuration(calculated.breakMinutes)} breaks deducted`;
     const increment = state.preferences.rounding_minutes;
     byId("roundingDescription").textContent = increment === 1 ? "No rounding" : `Next ${increment} min`;
+    const booked = draft.project_allocations.reduce((sum, item) => sum + item.minutes, 0);
+    const remaining = Math.max(0, (calculated.billable ?? 0) - booked);
+    const project = state.projects.projects.find(item => item.id === draft.default_project_id);
+    byId("bookingSummary").textContent = `${formatDuration(booked)} explicitly booked · ${formatDuration(remaining)} ${project ? "to " + project.name : "unassigned"}`;
+    if (calculated.billable != null && draft.check_out && booked > calculated.billable) throw new Error("Project bookings exceed this day's billable time.");
     showFormError();
   } catch (error) {
     byId("breakDeduction").textContent = "";
@@ -390,6 +406,74 @@ function updateLiveSummary() {
   if (state.statisticsData) renderStatistics(state.statisticsData);
 }
 
+function renderProjectOptions(select, selected) {
+  select.innerHTML = '<option value="">Unassigned</option>' + state.projects.projects
+    .filter(item => !item.archived || item.id === selected)
+    .map(item => `<option value="${item.id}">${escapeHtml(item.name)}${item.archived ? " (archived)" : ""}</option>`).join("");
+  select.value = selected || "";
+}
+
+function collectBookings() {
+  return [...byId("bookingList").children].map(row => ({
+    project_id: Number(row.querySelector("select").value),
+    minutes: Math.round(Number(row.querySelector("input").value) * 60),
+  }));
+}
+
+function addBookingRow(item = {}) {
+  const row = document.createElement("div");
+  row.className = "break-row";
+  row.innerHTML = '<select aria-label="Booking project"></select><input type="number" min="0.0166666667" max="48" step="any" aria-label="Billable hours"><button type="button" aria-label="Remove booking">×</button>';
+  renderProjectOptions(row.querySelector("select"), item.project_id);
+  row.querySelector("select").querySelector('option[value=""]').textContent = "Choose project";
+  row.querySelector("input").value = (item.minutes ?? 120) / 60;
+  row.addEventListener("input", updateLiveSummary);
+  row.querySelector("button").onclick = () => { row.remove(); updateLiveSummary(); };
+  byId("bookingList").append(row);
+}
+
+function renderProjects() {
+  renderProjectOptions(byId("defaultProject"), state.projects.default_project_id);
+  byId("projectCatalog").replaceChildren();
+  for (const project of state.projects.projects) {
+    const row = document.createElement("p");
+    const label = document.createElement("span");
+    label.textContent = project.name + (project.archived ? " (archived) " : " ");
+    const button = document.createElement("button");
+    button.type = "button";
+    button.textContent = project.archived ? "Unarchive" : "Archive";
+    button.className = "secondary-button compact";
+    button.onclick = () => projectMutation(`/projects/${project.id}`, "PUT", { name: project.name, archived: !project.archived });
+    row.append(label, button);
+    byId("projectCatalog").append(row);
+  }
+  const selected = state.entry?.saved ? Number(byId("dayProject").value) || null : state.projects.default_project_id;
+  renderProjectOptions(byId("dayProject"), selected);
+  for (const row of byId("bookingList").children) renderProjectOptions(row.querySelector("select"), Number(row.querySelector("select").value));
+  updateLiveSummary();
+}
+
+async function projectMutation(path, method, body) {
+  try {
+    byId("projectError").textContent = "";
+    state.projects = await api(path, { method, body: JSON.stringify(body) });
+    renderProjects();
+    return true;
+  } catch (error) { byId("projectError").textContent = error.message; return false; }
+}
+
+function setupProjects() {
+  byId("manageProjects").onclick = () => { renderProjects(); byId("projectsDialog").showModal(); };
+  byId("closeProjects").onclick = () => byId("projectsDialog").close();
+  byId("defaultProject").onchange = event => projectMutation("/projects/default", "PUT", { project_id: Number(event.target.value) || null });
+  byId("dayProject").onchange = updateLiveSummary;
+  byId("addBooking").onclick = () => { addBookingRow(); updateLiveSummary(); };
+  byId("createProjectForm").onsubmit = async event => {
+    event.preventDefault();
+    if (await projectMutation("/projects", "POST", { name: byId("projectName").value.trim() })) byId("projectName").value = "";
+  };
+}
+
 function renderEntry(entry) {
   state.entry = entry;
   if (entry.date === serverNow().date) state.todayEntry = entry;
@@ -397,6 +481,9 @@ function renderEntry(entry) {
   byId("checkOut").value = entry.check_out || "";
   byId("nextDayCheckout").checked = entry.check_out_next_day;
   byId("notes").value = entry.notes || "";
+  renderProjectOptions(byId("dayProject"), entry.saved ? entry.default_project_id : state.projects.default_project_id);
+  byId("bookingList").replaceChildren();
+  (entry.project_allocations || []).forEach(addBookingRow);
   byId("breakList").replaceChildren();
   entry.breaks.forEach(addBreakRow);
   updateEmptyBreaks();
@@ -602,6 +689,12 @@ function renderStatistics(data) {
   const end = dateFromISO(data.end);
   const dateFormat = new Intl.DateTimeFormat("en", { day: "2-digit", month: "short", year: "numeric" });
   byId("statisticsRange").textContent = `${dateFormat.format(start)} – ${dateFormat.format(end)}`;
+  byId("projectTotals").replaceChildren();
+  for (const total of data.project_totals || []) {
+    const row = document.createElement("p");
+    row.textContent = `${state.projects.projects.find(item => item.id === total.project_id)?.name || "Project " + total.project_id}: ${formatDuration(total.minutes)}`;
+    byId("projectTotals").append(row);
+  }
   byId("statExact").textContent = formatDuration(summary.exact_minutes, { decimal: true });
   byId("statBillable").textContent = formatDuration(summary.billable_minutes, { decimal: true });
   byId("statTarget").textContent = formatDuration(summary.target_minutes, { decimal: true });
@@ -614,10 +707,10 @@ function renderStatistics(data) {
   byId("calendarHolidays").textContent = summary.holiday_workdays;
   byId("calendarDaysOff").textContent = summary.day_off_workdays;
 
-  const maximum = Math.max(1, ...data.weeks.flatMap((week) => [week.exact_minutes, week.target_minutes]));
+  const maximum = Math.max(1, ...data.weeks.flatMap((week) => [week.billable_minutes, week.target_minutes]));
   byId("weeklyChart").innerHTML = data.weeks.map((week) => {
     const weekDate = dateFromISO(week.week_start);
-    return `<div class="chart-column" title="${formatDuration(week.exact_minutes)} actual · ${formatDuration(week.target_minutes)} target"><div class="chart-bars"><span class="chart-bar" style="height:${Math.max(2, week.exact_minutes / maximum * 100)}%"></span><span class="chart-bar target" style="height:${Math.max(2, week.target_minutes / maximum * 100)}%"></span></div><small>${weekDate.getDate()} ${weekDate.toLocaleString("en", { month: "short" })}</small></div>`;
+    return `<div class="chart-column" title="${formatDuration(week.billable_minutes)} billable · ${formatDuration(week.target_minutes)} target"><div class="chart-bars"><span class="chart-bar" style="height:${Math.max(2, week.billable_minutes / maximum * 100)}%"></span><span class="chart-bar target" style="height:${Math.max(2, week.target_minutes / maximum * 100)}%"></span></div><small>${weekDate.getDate()} ${weekDate.toLocaleString("en", { month: "short" })}</small></div>`;
   }).join("");
 
   const visibleDays = state.period === "year"
@@ -701,7 +794,8 @@ function shiftStatistics(direction) {
 }
 
 async function initialize() {
-  [state.meta, state.preferences] = await Promise.all([api("/meta"), api("/preferences")]);
+  [state.meta, state.preferences, state.projects] = await Promise.all([api("/meta"), api("/preferences"), api("/projects")]);
+  setupProjects();
   state.currentDate = serverNow().date;
   byId("federalState").innerHTML = Object.entries(state.meta.federal_states)
     .map(([code, name]) => `<option value="${code}">${escapeHtml(name)}</option>`).join("");

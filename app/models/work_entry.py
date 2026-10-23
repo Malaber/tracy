@@ -3,6 +3,7 @@ from datetime import date, datetime
 
 from sqlalchemy import (
     Boolean,
+    JSON,
     CheckConstraint,
     Date,
     DateTime,
@@ -31,6 +32,8 @@ class WorkEntry(Base):
     check_in_minutes: Mapped[int | None] = mapped_column(Integer)
     check_out_minutes: Mapped[int | None] = mapped_column(Integer)
     check_out_next_day: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    default_project_id: Mapped[int | None] = mapped_column(Integer)
+    project_allocations: Mapped[list] = mapped_column(JSON, default=list, nullable=False)
     notes: Mapped[str] = mapped_column(Text, nullable=False, default="")
     revision: Mapped[str] = mapped_column(
         String(36), nullable=False, default=lambda: str(uuid.uuid4())
@@ -62,6 +65,7 @@ class BreakEntry(Base):
         ForeignKey("work_entries.id", ondelete="CASCADE"), nullable=False, index=True
     )
     position: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    automatic: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     mode: Mapped[str] = mapped_column(String(16), nullable=False)
     duration_minutes: Mapped[int | None] = mapped_column(Integer)
     start_minutes: Mapped[int | None] = mapped_column(Integer)
