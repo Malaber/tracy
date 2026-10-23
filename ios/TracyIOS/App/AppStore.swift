@@ -170,7 +170,37 @@ final class AppStore: ObservableObject {
         await refresh()
     }
 
-    func entry(_ date: String) -> WorkEntry { journal?.entry(date) ?? .empty(date: date) }
+    func entry(_ date: String) -> WorkEntry {
+        var entry = journal?.entry(date) ?? .empty(date: date)
+        if !entry.saved && !isPending(date) {
+            entry.defaultProjectId = snapshot.projectCatalog?.defaultProjectId
+        }
+        return entry
+    }
+
+    var projects: [Project] { snapshot.projectCatalog?.projects ?? [] }
+
+    func updateProjects(path: String, method: String, body: Data) async throws {
+        guard let journal else { throw TracyError.server("Sign in to manage projects.") }
+        let catalog: ProjectCatalog
+        if isDemo {
+            var current = snapshot.projectCatalog ?? ProjectCatalog()
+            let json = try JSONSerialization.jsonObject(with: body) as! [String: Any]
+            if path == "projects/default" { current.defaultProjectId = json["project_id"] as? Int }
+            else if method == "POST" {
+                current.projects.append(Project(id: (current.projects.map(\.id).max() ?? 0) + 1, name: json["name"] as? String ?? "Project"))
+            } else if let id = Int(path.split(separator: "/").last ?? ""), let index = current.projects.firstIndex(where: { $0.id == id }) {
+                current.projects[index].archived = json["archived"] as? Bool ?? false
+                if current.projects[index].archived && current.defaultProjectId == id { current.defaultProjectId = nil }
+            }
+            catalog = current
+        } else {
+            guard isOnline, let api else { throw TracyError.server("Connect to manage projects. Existing project bookings can be edited offline.") }
+            catalog = try TracyAPI.decoder.decode(ProjectCatalog.self, from: await api.data(path, method: method, body: body))
+        }
+        try journal.cacheProjects(catalog)
+        snapshot = journal.snapshot
+    }
     func isPending(_ date: String) -> Bool { snapshot.pending.contains { $0.date == date } }
     func conflict(_ date: String) -> WorkEntry? {
         snapshot.pending.first { $0.date == date && $0.conflict != nil }?.conflict
@@ -250,6 +280,13 @@ final class AppStore: ObservableObject {
             snapshot = journal.snapshot
             let preferences = try TracyAPI.decoder.decode(WorkPreferences.self, from: await api.data("preferences"))
             try journal.cacheRounding(preferences.roundingMinutes)
+            if meta.projectBookings == true {
+                let catalog = try TracyAPI.decoder.decode(ProjectCatalog.self, from: await api.data("projects"))
+                try journal.cacheProjects(catalog)
+            } else if journal.snapshot.pending.contains(where: { !($0.payload.projectAllocations ?? []).isEmpty || $0.payload.defaultProjectId != nil }) {
+                notice = "Update the Tracy server before syncing project bookings. Your bookings remain saved on this device."
+                return
+            }
             try await JournalSynchronizer.synchronize(journal, using: api)
             snapshot = journal.snapshot
             let end = Clock.day(Date(), timezone: meta.timezone)
@@ -294,8 +331,12 @@ final class AppStore: ObservableObject {
                 snapshot = journal.snapshot
                 return
             }
+            if ProcessInfo.processInfo.arguments.contains("--ui-projects") {
+                try journal.cacheProjects(ProjectCatalog(projects: [Project(id: 1, name: "Project X"), Project(id: 2, name: "Project Y")], defaultProjectId: 1))
+            }
             let today = Clock.day(currentDate, timezone: "Europe/Berlin")
             var entry = WorkEntry.empty(date: today)
+            entry.defaultProjectId = journal.snapshot.projectCatalog?.defaultProjectId
             entry.checkIn = "08:30"
             entry.status = "in_progress"
             entry.saved = true

@@ -39,11 +39,19 @@ def test_passkey_migration_preserves_legacy_tracker_data(tmp_path):
             is None
         )
         inspector = inspect(connection)
-        assert {"users", "passkeys", "auth_sessions", "days_off"} <= set(
+        assert {"users", "passkeys", "auth_sessions", "days_off", "projects"} <= set(
             inspector.get_table_names()
         )
         assert {
             constraint["name"] for constraint in inspector.get_unique_constraints("days_off")
         } == {"uq_days_off_user_date"}
+        columns = {column["name"] for column in inspector.get_columns("work_entries")}
+        assert {"project_allocations", "default_project_id"} <= columns
+        assert (
+            connection.execute(
+                text("SELECT project_allocations FROM work_entries WHERE notes = 'legacy'")
+            ).scalar_one()
+            == "[]"
+        )
         assert inspector.get_foreign_keys("days_off")[0]["referred_table"] == "users"
     engine.dispose()

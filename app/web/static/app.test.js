@@ -130,7 +130,7 @@ test("live statistics replace day contribution without double counting or comple
   const result = projectStatistics(data, entry, estimate);
   assert.equal(result.summary.exact_minutes, 721);
   assert.equal(result.summary.billable_minutes, 735);
-  assert.equal(result.summary.balance_minutes, -1679);
+  assert.equal(result.summary.balance_minutes, -1665);
   assert.equal(result.summary.completed_days, 1);
   assert.equal(result.weeks[0].exact_minutes, 721);
   assert.equal(result.days[0].status, "in_progress");
@@ -159,6 +159,7 @@ test("tracker updates live estimates every minute without saving checkout", asyn
     globalThis.fetch = async (url, options) => {
       requests.push({ url, options });
       const data = url.endsWith("/meta") ? { timezone: "UTC", federal_states: {} }
+        : url.endsWith("/projects") ? { projects: [], default_project_id: null }
         : url.endsWith("/preferences") ? { rounding_minutes: 15 }
         : url.includes("/statistics?") ? stats : entry;
       return { ok: true, json: async () => structuredClone(data) };
@@ -194,6 +195,61 @@ test("tracker updates live estimates every minute without saving checkout", asyn
     await new Promise(resolve => setImmediate(resolve));
     assert.equal(element("workDate").value, "2026-10-12");
     assert.equal(element("goToToday").hidden, true);
+  } finally {
+    for (const [key, value] of Object.entries(originals)) {
+      if (value === undefined) delete globalThis[key]; else globalThis[key] = value;
+    }
+    dom.window.close();
+  }
+});
+
+test("web project bookings preserve defaults and automatic breaks disappear on shorter days", async () => {
+  const { JSDOM } = await import("jsdom");
+  const html = await fs.readFile(new URL("../templates/index.html", import.meta.url), "utf8");
+  const dom = new JSDOM(html, { url: "https://tracy.example" });
+  const keys = ["document", "location", "fetch", "setInterval"];
+  const originals = Object.fromEntries(keys.map(key => [key, globalThis[key]]));
+  let tick, saved;
+  const entry = { date: "2026-10-22", saved: false, check_in: "08:44", check_out: "17:00", breaks: [], status: "complete" };
+  const projects = { projects: [{ id: 1, name: "X", archived: false }, { id: 2, name: "Y", archived: false }, { id: 3, name: "Old", archived: true }], default_project_id: 1 };
+  const stats = { summary: { billable_minutes: 0, exact_minutes: 0, target_minutes: 2400 }, days: [] };
+  try {
+    globalThis.document = dom.window.document;
+    globalThis.location = dom.window.location;
+    globalThis.setInterval = fn => { tick = fn; };
+    globalThis.fetch = async (url, options) => {
+      let data;
+      if (url.endsWith("/meta")) data = { timezone: "UTC", federal_states: {} };
+      else if (url.endsWith("/preferences")) data = { rounding_minutes: 15 };
+      else if (url.endsWith("/projects")) data = projects;
+      else if (url.includes("/statistics?")) data = stats;
+      else if (options.method === "PUT") { saved = JSON.parse(options.body); data = { ...entry, ...saved, saved: true }; }
+      else data = entry;
+      return { ok: true, json: async () => structuredClone(data) };
+    };
+    await import(`./app.js?projects=${Date.now()}`);
+    for (let i = 0; i < 100 && !tick; i++) await new Promise(resolve => setImmediate(resolve));
+    assert.equal(typeof tick, "function");
+    const el = id => document.getElementById(id);
+    assert.equal(el("dayProject").value, "1");
+    assert.ok(!el("dayProject").textContent.includes("Old"));
+    assert.equal(el("breakList").children.length, 1);
+    el("checkOut").value = "14:16";
+    el("checkOut").dispatchEvent(new dom.window.Event("input"));
+    assert.equal(el("breakList").children.length, 0);
+    assert.equal(el("billableHours").textContent, "5.75");
+    el("addBooking").click();
+    const row = el("bookingList").firstChild;
+    row.querySelector("select").value = "2";
+    row.querySelector("select").dispatchEvent(new dom.window.Event("input", { bubbles: true }));
+    assert.equal(row.querySelector("input").value, "2");
+    assert.match(el("bookingSummary").textContent, /3 h 45 min to X/);
+    el("saveEntry").click();
+    for (let i = 0; i < 30 && !saved; i++) await new Promise(resolve => setImmediate(resolve));
+    assert.equal(saved.default_project_id, 1);
+    assert.deepEqual(saved.project_allocations, [{ project_id: 2, minutes: 120 }]);
+    assert.deepEqual(saved.breaks, []);
+    await new Promise(resolve => setImmediate(resolve));
   } finally {
     for (const [key, value] of Object.entries(originals)) {
       if (value === undefined) delete globalThis[key]; else globalThis[key] = value;

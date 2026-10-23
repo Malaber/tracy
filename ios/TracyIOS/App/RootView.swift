@@ -112,13 +112,13 @@ struct TodayView: View {
                         LayoutCheckedText(headline, key: "headline").font(.largeTitle.bold())
                             .accessibilityAddTraits(.isHeader)
                             .accessibilityHint(subtitle)
-                        if let billable = store.signOffEstimate?.billableMinutes ?? entry.billableMinutes {
-                            LayoutCheckedText("\(Clock.duration(billable)) billable", key: "billable")
+                        if (store.signOffEstimate?.billableMinutes ?? entry.billableMinutes) != nil {
+                            LayoutCheckedText("Billable time", key: "billable")
                                 .font(.subheadline).accessibilityIdentifier("heroBillable")
                         }
                         LayoutCheckedText("\(Clock.duration(store.signOffEstimate?.breakMinutes ?? entry.breakMinutes)) breaks deducted", key: "breaks")
                             .font(.footnote).accessibilityIdentifier("heroBreaks")
-                        let minutes = store.signOffEstimate?.exactMinutes ?? entry.exactMinutes ?? 0
+                        let minutes = store.signOffEstimate?.billableMinutes ?? entry.billableMinutes ?? 0
                         let progress = min(1, max(0, Double(minutes) / 480))
                         ProgressView(value: progress) {
                             Text(store.signOffEstimate != nil ? "If you check out now · 8h goal" : "8h working-day goal")
@@ -225,15 +225,15 @@ struct TodayView: View {
     }
 
     private var headline: String {
-        if let estimate = store.signOffEstimate { return Clock.duration(estimate.exactMinutes) }
+        if let estimate = store.signOffEstimate { return Clock.duration(estimate.billableMinutes) }
+        if let minutes = entry.billableMinutes { return Clock.duration(minutes) }
         if store.isPending(store.today) {
             return entry.checkOut == nil ? "Your day is underway" : "Your day, recorded"
         }
-        if let minutes = entry.exactMinutes { return Clock.duration(minutes) }
         return entry.checkIn == nil ? "Ready when you are" : "Your day is underway"
     }
     private var subtitle: String {
-        if store.isPending(store.today) { return "Saved on this device. Totals update after sync." }
+        if store.isPending(store.today) { return "Saved on this device. Billable time uses your last synced rounding setting." }
         if entry.checkOut != nil { return "Working time recorded for today." }
         return entry.checkIn == nil
             ? "One tap to start. A moment to review."
@@ -390,7 +390,7 @@ struct RecentDaysView: View {
                             : needsAttention(date) ? "exclamationmark.circle" : "calendar"
             )
             .font(.subheadline).foregroundStyle(needsAttention(date) ? Color.primary : Color.secondary)
-            if let exact = entry.exactMinutes, !pending {
+            if let exact = entry.billableMinutes, !pending {
                 Text(Clock.duration(exact)).font(.subheadline).foregroundStyle(.primary)
             }
         }

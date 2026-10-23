@@ -12,6 +12,7 @@ public struct PendingEntry: Codable, Identifiable, Sendable {
 public struct JournalSnapshot: Codable, Sendable {
     public var entries: [String: WorkEntry] = [:]
     public var pending: [PendingEntry] = []
+    public var projectCatalog: ProjectCatalog?
     public var timezone = "Europe/Berlin"
     public var recent: Statistics?
     public var week: Statistics?
@@ -33,6 +34,12 @@ public final class OfflineJournal {
         } else {
             snapshot = JournalSnapshot()
         }
+    }
+
+    public func cacheProjects(_ catalog: ProjectCatalog) throws {
+        var next = snapshot
+        next.projectCatalog = catalog
+        try commit(next)
     }
 
     public func cacheWeek(_ statistics: Statistics) throws {
@@ -73,6 +80,8 @@ public final class OfflineJournal {
             entry.checkOut = pending.payload.checkOut
             entry.checkOutNextDay = pending.payload.checkOutNextDay
             entry.breaks = pending.payload.breaks
+            entry.projectAllocations = pending.payload.projectAllocations
+            entry.defaultProjectId = pending.payload.defaultProjectId
             entry.breakMinutes = pending.payload.breaks.reduce(0) { total, item in
                 if item.mode == "duration" { return total + (item.durationMinutes ?? 0) }
                 guard let start = item.start.flatMap(Clock.minutes),
@@ -82,16 +91,17 @@ public final class OfflineJournal {
             entry.notes = pending.payload.notes
             entry.status =
                 entry.checkIn == nil ? "empty" : (entry.checkOut == nil ? "in_progress" : "complete")
-            // Totals remain server-authoritative; never show stale totals for an edited day.
-            entry.exactMinutes = nil
-            entry.billableMinutes = nil
+            // Recompute pending-day totals using the last synced rounding preference.
+            entry.exactMinutes = pending.payload.exactMinutes
+            let increment = max(1, snapshot.roundingMinutes ?? 15)
+            entry.billableMinutes = entry.exactMinutes.map { ($0 + increment - 1) / increment * increment }
         }
         return entry
     }
 
     public func enqueue(date: String, payload: EntryPayload, baseRevision: String? = nil) throws {
-        if let message = payload.validationMessage { throw TracyError.server(message) }
         let payload = payload.applyingDefaultBreak(previous: entry(date).payload)
+        if let message = payload.bookingValidation(rounding: snapshot.roundingMinutes ?? 15) { throw TracyError.server(message) }
         var next = snapshot
         // A corrected edit replaces a definitively rejected request. Uncertain requests
         // remain in order so a lost response can still be recovered idempotently.

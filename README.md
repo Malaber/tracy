@@ -101,3 +101,13 @@ regular accessibility suite. Pull requests validate
 capture and publish downloadable workflow artifacts; releases additionally attach
 the ZIP to the exact release tag. A failed capture fails its job and publishes no
 partial screenshot archive. App Store uploads remain manual.
+
+### Project bookings
+
+Web and iOS support multiple project bookings per day. Enter billable minutes (120 for two hours), and choose the project that receives the remaining rounded daily total. A global default applies to new days; changing it never rewrites historical assignments. With no default, remaining minutes stay unassigned. Bookings cannot exceed a completed day's billable total. Ongoing days may contain planned bookings; checkout requires enough billable time or reduced bookings.
+
+Projects can be created, made default, archived, and unarchived. Archived names stay on historical bookings but are excluded from new suggestions. Archiving the global default clears that default. Project totals in Statistics cover saved completed days. Existing project bookings work through the iOS offline queue; creating/managing projects requires a connection.
+
+Deploy the API migration before using project booking features in TestFlight. The app keeps ordinary tracking compatible with older servers and does not sync project bookings to servers lacking support.
+
+Automatic 30-minute breaks apply only after six elapsed hours. New automatic breaks retain provenance and disappear if checkout is shortened to six hours or less. Editing a break manually makes it explicit. Legacy breaks have no provenance and remain manual; they can be removed in Edit entry. This avoids deleting actual breaks from old records. Billable time leads day/week/statistics summaries and balances; exact time remains available as detail.

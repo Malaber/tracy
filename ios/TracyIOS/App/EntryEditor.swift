@@ -7,6 +7,7 @@ struct EntryEditor: View {
     let entry: WorkEntry
     @State private var draft: EntryPayload
     @State private var confirmDiscard = false
+    @State private var bookings: [EditableBooking]
     @State private var breakIDs: [UUID]
     @State private var breakToRemove: UUID?
     @State private var error: String?
@@ -20,14 +21,24 @@ struct EntryEditor: View {
         self.checkoutPrompt = checkoutPrompt
         self.timezone = timezone
         _draft = State(initialValue: entry.payload)
+        _bookings = State(initialValue: (entry.projectAllocations ?? []).map { EditableBooking(projectId: $0.projectId, minutes: $0.minutes) })
         _breakIDs = State(initialValue: entry.breaks.map { _ in UUID() })
         let base = WorkdayDates.date(entry.date, minutes: (entry.checkOut.flatMap(Clock.minutes) ?? 17 * 60)
                                     + (entry.checkOutNextDay ? 1440 : 0), timezone: timezone) ?? Date()
         _checkoutDate = State(initialValue: base)
     }
 
-    private var changed: Bool { draft != entry.payload }
-    private var validation: String? { draft.validationMessage }
+    private var preparedDraft: EntryPayload {
+        var result = draft.removingPrematureAutomaticBreaks
+        result.projectAllocations = bookings.map { ProjectAllocation(projectId: $0.projectId, minutes: $0.minutes) }
+        return result
+    }
+    private var changed: Bool {
+        var original = entry.payload
+        original.projectAllocations = original.projectAllocations ?? []
+        return preparedDraft != original
+    }
+    private var validation: String? { preparedDraft.bookingValidation(rounding: store.snapshot.roundingMinutes ?? 15) }
 
     var body: some View {
         NavigationStack {
@@ -102,7 +113,7 @@ struct EntryEditor: View {
                                         get: { item.wrappedValue.durationMinutes ?? 30 },
                                         set: { value in
                                             if value == 0 { breakToRemove = id }
-                                            else { item.wrappedValue.durationMinutes = value }
+                                            else { item.wrappedValue.durationMinutes = value; item.wrappedValue.automatic = false }
                                         }), in: 0...1440)
                                     .accessibilityLabel("Break \(index + 1) duration")
                                     .accessibilityValue("\(item.wrappedValue.durationMinutes ?? 30) minutes")
@@ -135,8 +146,11 @@ struct EntryEditor: View {
                     Text("Breaks")
                 } footer: {
                     Text(
-                        "When a day is first completed with more than six hours and no break, Tracy adds a 30-minute break. You can adjust it after syncing. Overnight break ranges are supported."
+                        "When a day is first completed with more than six hours and no break, Tracy adds a 30-minute break. Automatic breaks are removed when a day is shortened to six hours or less. Manual breaks are preserved. Overnight break ranges are supported."
                     )
+                }
+                if store.snapshot.projectCatalog != nil {
+                    ProjectBookingSection(defaultProjectId: $draft.defaultProjectId, bookings: $bookings)
                 }
                 Section("Notes") {
                     TextField("What would you like to remember?", text: $draft.notes, axis: .vertical)
@@ -149,6 +163,9 @@ struct EntryEditor: View {
                 if let error { Section { Text(error).foregroundStyle(.red) } }
             }
             .accessibilityIdentifier("entryForm")
+            .onChange(of: draft.checkIn) { _, _ in removePrematureAutomaticBreaks() }
+            .onChange(of: draft.checkOut) { _, _ in removePrematureAutomaticBreaks() }
+            .onChange(of: draft.checkOutNextDay) { _, _ in removePrematureAutomaticBreaks() }
             .navigationTitle("Edit entry")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -158,7 +175,7 @@ struct EntryEditor: View {
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Save") {
                         do {
-                            try store.save(date: entry.date, payload: draft, baseRevision: entry.revision)
+                            try store.save(date: entry.date, payload: preparedDraft, baseRevision: entry.revision)
                             dismiss()
                         } catch { self.error = error.localizedDescription }
                     }.disabled(validation != nil).accessibilityIdentifier("saveEntry")
@@ -182,6 +199,12 @@ struct EntryEditor: View {
                 Button("Discard changes", role: .destructive) { dismiss() }
             }
         }
+    }
+
+    private func removePrematureAutomaticBreaks() {
+        guard draft.removingPrematureAutomaticBreaks.breaks.count != draft.breaks.count else { return }
+        let ids = zip(breakIDs, draft.breaks).filter { $0.1.automatic == true }.map { $0.0 }
+        ids.forEach(removeBreak)
     }
 
     // Bind by identity: SwiftUI may retain a row binding after a neighbouring row is deleted.

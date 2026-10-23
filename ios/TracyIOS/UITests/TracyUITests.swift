@@ -260,6 +260,47 @@ final class TracyUITests: XCTestCase {
     }
 
     @MainActor
+    func testProjectBookingPersistsAndProjectArchiveRestores() {
+        let app = XCUIApplication()
+        app.launchArguments = testArguments + ["--ui-projects"]
+        app.launchEnvironment["TRACY_UI_JOURNAL"] = UUID().uuidString
+        app.launch()
+        defer { app.terminate() }
+        XCTAssertTrue(app.buttons["editToday"].waitForExistence(timeout: 15))
+        app.buttons["editToday"].tap()
+        let form = app.descendants(matching: .any).matching(identifier: "entryForm").firstMatch
+        let add = app.buttons["addProjectBooking"]
+        for _ in 0..<8 {
+            if add.exists && add.isHittable { break }
+            form.swipeUp()
+        }
+        add.tap()
+        XCTAssertTrue(app.textFields["Booking minutes"].waitForExistence(timeout: 5))
+        XCTAssertEqual(app.textFields["Booking minutes"].value as? String, "120")
+        app.buttons["saveEntry"].tap()
+        app.terminate()
+        app.launch()
+        XCTAssertTrue(app.buttons["editToday"].waitForExistence(timeout: 15))
+        app.buttons["editToday"].tap()
+        for _ in 0..<8 {
+            if app.textFields["Booking minutes"].exists && app.textFields["Booking minutes"].isHittable { break }
+            form.swipeUp()
+        }
+        XCTAssertEqual(app.textFields["Booking minutes"].value as? String, "120")
+        app.buttons["saveEntry"].tap()
+        app.buttons["Settings"].firstMatch.tap()
+        app.buttons["Projects"].tap()
+        let archive = app.buttons["projectArchive1"]
+        XCTAssertTrue(archive.waitForExistence(timeout: 10))
+        archive.tap()
+        XCTAssertEqual(archive.label, "Unarchive")
+        archive.tap()
+        XCTAssertEqual(archive.label, "Archive")
+        app.buttons["projectDefault1"].tap()
+        XCTAssertTrue(app.staticTexts["Default project"].waitForExistence(timeout: 5))
+    }
+
+    @MainActor
     func testVacationFromTodayAndEntryEditor() {
         let app = XCUIApplication()
         app.launchArguments = testArguments

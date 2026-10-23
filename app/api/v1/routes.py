@@ -23,10 +23,17 @@ from app.models import (
     Passkey,
     PasskeyAddLink,
     Preferences,
+    Project,
     User,
     WorkEntry,
 )
-from app.schemas.time_tracking import DayOffRangePayload, PreferencesPayload, WorkEntryPayload
+from app.schemas.time_tracking import (
+    DayOffRangePayload,
+    PreferencesPayload,
+    WorkEntryPayload,
+    ProjectPayload,
+    DefaultProjectPayload,
+)
 from app.services.german_holidays import FEDERAL_STATES
 from app.services.statistics import build_statistics, period_bounds
 from app.services.time_calculation import (
@@ -87,6 +94,7 @@ def _days_off_payload(days_off: set[date]) -> dict:
 def _break_to_payload(item: BreakEntry) -> dict:
     return {
         "id": item.id,
+        "automatic": item.automatic,
         "mode": item.mode,
         "duration_minutes": item.duration_minutes,
         "start": format_clock_time(item.start_minutes),
@@ -108,6 +116,9 @@ def _entry_to_payload(
             "check_out": None,
             "check_out_next_day": False,
             "breaks": [],
+            "project_allocations": [],
+            "default_project_id": None,
+            "project_bookings": [],
             "break_minutes": 0,
             "exact_minutes": None,
             "exact_hours": None,
@@ -146,6 +157,9 @@ def _entry_to_payload(
         "check_out": format_clock_time(entry.check_out_minutes),
         "check_out_next_day": entry.check_out_next_day,
         "breaks": [_break_to_payload(item) for item in entry.breaks],
+        "project_allocations": entry.project_allocations or [],
+        "default_project_id": entry.default_project_id,
+        "project_bookings": _project_bookings(entry, billable),
         "break_minutes": break_minutes,
         "exact_minutes": exact,
         "exact_hours": minutes_as_hours(exact),
@@ -167,6 +181,14 @@ async def _entry_for_date(db: AsyncSession, user_id: UUID, work_date: date) -> W
 
 
 def _add_default_break(entry: WorkEntry, *, was_complete: bool) -> None:
+    if entry.check_in_minutes is not None and entry.check_out_minutes is not None:
+        span = (
+            entry.check_out_minutes
+            + (1440 if entry.check_out_next_day else 0)
+            - entry.check_in_minutes
+        )
+        if span <= 360:
+            entry.breaks[:] = [item for item in entry.breaks if not item.automatic]
     if was_complete or not needs_default_break(
         entry.check_in_minutes,
         entry.check_out_minutes,
@@ -179,13 +201,147 @@ def _add_default_break(entry: WorkEntry, *, was_complete: bool) -> None:
             position=0,
             mode="duration",
             duration_minutes=DEFAULT_BREAK_MINUTES,
+            automatic=True,
         )
     )
 
 
+def _validate_project_total(entry: WorkEntry, rounding: int) -> None:
+    exact, _ = calculate_work_minutes(
+        entry.check_in_minutes,
+        entry.check_out_minutes,
+        entry.check_out_next_day,
+        [
+            dict(
+                mode=b.mode,
+                duration_minutes=b.duration_minutes,
+                start_minutes=b.start_minutes,
+                end_minutes=b.end_minutes,
+            )
+            for b in entry.breaks
+        ],
+    )
+    if exact is not None and sum(
+        item["minutes"] for item in (entry.project_allocations or [])
+    ) > round_up(exact, rounding):
+        raise HTTPException(
+            422,
+            "Project bookings exceed the day's billable time. Reduce the bookings before saving.",
+        )
+
+
+def _project_bookings(entry: WorkEntry, billable: int | None) -> list[dict]:
+    bookings = [dict(item) for item in (entry.project_allocations or [])]
+    remaining = max(0, (billable or 0) - sum(item["minutes"] for item in bookings))
+    if entry.default_project_id is not None and remaining:
+        bookings.append({"project_id": entry.default_project_id, "minutes": remaining})
+    return bookings
+
+
+async def _owned_project(db: AsyncSession, user_id: UUID, project_id: int) -> Project:
+    project = (
+        await db.execute(
+            select(Project).where(Project.id == project_id, Project.user_id == user_id)
+        )
+    ).scalar_one_or_none()
+    if project is None:
+        raise HTTPException(422, "Choose a project belonging to this account.")
+    return project
+
+
+@router.get("/projects")
+async def list_projects(
+    db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)
+) -> dict:
+    projects = (
+        (
+            await db.execute(
+                select(Project).where(Project.user_id == user.id).order_by(Project.name_key)
+            )
+        )
+        .scalars()
+        .all()
+    )
+    preferences = await _preferences(db, user.id)
+    return {
+        "projects": [
+            {"id": item.id, "name": item.name, "archived": item.archived} for item in projects
+        ],
+        "default_project_id": preferences.default_project_id,
+    }
+
+
+@router.put("/projects/default")
+async def set_default_project(
+    payload: DefaultProjectPayload,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+) -> dict:
+    if payload.project_id is not None:
+        project = await _owned_project(db, user.id, payload.project_id)
+        if project.archived:
+            raise HTTPException(422, "Unarchive this project before making it the default.")
+    preferences = await _preferences(db, user.id)
+    preferences.default_project_id = payload.project_id
+    await db.commit()
+    return await list_projects(db, user)
+
+
+@router.post("/projects", status_code=201)
+async def create_project(
+    payload: ProjectPayload,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+) -> dict:
+    db.add(
+        Project(
+            user_id=user.id,
+            name=payload.name,
+            name_key=payload.name.casefold(),
+            archived=payload.archived,
+        )
+    )
+    try:
+        await db.commit()
+    except IntegrityError as exc:
+        await db.rollback()
+        raise HTTPException(
+            409, "A project with this name already exists. Unarchive it if needed."
+        ) from exc
+    return await list_projects(db, user)
+
+
+@router.put("/projects/{project_id}")
+async def update_project(
+    project_id: int,
+    payload: ProjectPayload,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+) -> dict:
+    project = await _owned_project(db, user.id, project_id)
+    preferences = await _preferences(db, user.id)
+    project.name, project.name_key, project.archived = (
+        payload.name,
+        payload.name.casefold(),
+        payload.archived,
+    )
+    if project.archived and preferences.default_project_id == project.id:
+        preferences.default_project_id = None
+    try:
+        await db.commit()
+    except IntegrityError as exc:
+        await db.rollback()
+        raise HTTPException(409, "A project with this name already exists.") from exc
+    return await list_projects(db, user)
+
+
 @router.get("/meta")
 async def get_meta(_user: User = Depends(get_current_user)) -> dict:
-    return {"federal_states": FEDERAL_STATES, "timezone": settings.timezone}
+    return {
+        "federal_states": FEDERAL_STATES,
+        "timezone": settings.timezone,
+        "project_bookings": True,
+    }
 
 
 @router.get("/preferences")
@@ -348,19 +504,40 @@ async def upsert_entry(
         entry and entry.check_in_minutes is not None and entry.check_out_minutes is not None
     )
     if entry is None:
-        entry = WorkEntry(user_id=user.id, work_date=work_date)
+        entry = WorkEntry(
+            user_id=user.id, work_date=work_date, default_project_id=preferences.default_project_id
+        )
         db.add(entry)
+    if payload.project_allocations is not None:
+        entry.project_allocations = [item.model_dump() for item in payload.project_allocations]
+    if "default_project_id" in payload.model_fields_set:
+        entry.default_project_id = payload.default_project_id
+    ids = {item["project_id"] for item in (entry.project_allocations or [])}
+    if entry.default_project_id is not None:
+        ids.add(entry.default_project_id)
+    with db.no_autoflush:
+        for project_id in ids:
+            await _owned_project(db, user.id, project_id)
     entry.check_in_minutes = parse_clock_time(payload.check_in)
     entry.check_out_minutes = parse_clock_time(payload.check_out)
     entry.check_out_next_day = payload.check_out_next_day
     entry.notes = payload.notes.strip()
     entry.revision = str(uuid4())
     entry.client_mutation_id = str(idempotency_key) if idempotency_key else None
+    previous_breaks = list(entry.breaks)
     entry.breaks.clear()
     for position, break_payload in enumerate(payload.breaks):
         normalized = break_payload.normalized()
+        if "automatic" not in break_payload.model_fields_set and position < len(previous_breaks):
+            previous = previous_breaks[position]
+            if all(
+                getattr(previous, key) == normalized[key]
+                for key in ("mode", "duration_minutes", "start_minutes", "end_minutes")
+            ):
+                normalized["automatic"] = previous.automatic
         entry.breaks.append(BreakEntry(position=position, **normalized))
     _add_default_break(entry, was_complete=was_complete)
+    _validate_project_total(entry, preferences.rounding_minutes)
     try:
         await db.commit()
     except (IntegrityError, StaleDataError) as exc:
@@ -400,8 +577,11 @@ async def check_in(
 ) -> dict:
     entry = await _entry_for_date(db, user.id, work_date)
     now = datetime.now(ZoneInfo(settings.timezone))
+    preferences = await _preferences(db, user.id)
     if entry is None:
-        entry = WorkEntry(user_id=user.id, work_date=work_date)
+        entry = WorkEntry(
+            user_id=user.id, work_date=work_date, default_project_id=preferences.default_project_id
+        )
         db.add(entry)
     entry.check_in_minutes = now.hour * 60 + now.minute
     entry.client_mutation_id = None
@@ -438,6 +618,8 @@ async def check_out(
     entry.client_mutation_id = None
     entry.revision = str(uuid4())
     _add_default_break(entry, was_complete=was_complete)
+    preferences = await _preferences(db, user.id)
+    _validate_project_total(entry, preferences.rounding_minutes)
     await db.commit()
     await db.refresh(entry)
     preferences = await _preferences(db, user.id)

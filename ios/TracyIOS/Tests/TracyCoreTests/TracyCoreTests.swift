@@ -41,7 +41,7 @@ import Testing
         let data = try JSONSerialization.data(withJSONObject: [
             "date": date, "weekday": "Monday", "is_weekend": false,
             "is_day_off": off, "is_workday": !off, "expected_minutes": expected,
-            "exact_minutes": status == "complete" ? 480 : 0, "billable_minutes": 0,
+            "exact_minutes": status == "complete" ? 480 : 0, "billable_minutes": status == "complete" ? 480 : 0,
             "balance_minutes": -expected,
             "status": status, "notes": "",
         ])
@@ -75,7 +75,7 @@ private func journal() throws -> (OfflineJournal, URL) {
     #expect(restored.snapshot.pending.count == 1)
     #expect(restored.entry("2026-09-29").payload == payload)
     #expect(restored.snapshot.pending[0].id == journal.snapshot.pending[0].id)
-    #expect(restored.entry("2026-09-29").exactMinutes == nil)
+    #expect(restored.entry("2026-09-29").exactMinutes == 495)
 }
 
 @Test @MainActor func corruptionAndDiskErrorsDoNotDiscardExistingEntries() throws {
@@ -198,11 +198,11 @@ private actor MockServer: EntrySyncService {
     let day = "2026-09-29"
     try journal.enqueue(date: day, payload: .init(checkIn: "08:00"))
     try journal.enqueue(date: day, payload: .init(checkIn: "08:00", checkOut: "17:00"))
-    #expect(journal.entry(day).breaks == [.init(durationMinutes: 30)])
+    #expect(journal.entry(day).breaks == [.init(automatic: true, durationMinutes: 30)])
     var edited = journal.entry(day).payload
     edited.notes = "A later note"
     try journal.enqueue(date: day, payload: edited)
-    #expect(journal.snapshot.pending.last?.payload.breaks == [.init(durationMinutes: 30)])
+    #expect(journal.snapshot.pending.last?.payload.breaks == [.init(automatic: true, durationMinutes: 30)])
     edited.breaks = []
     try journal.enqueue(date: day, payload: edited)
     #expect(journal.entry(day).breaks.isEmpty)  // An explicit correction stays intentional.
@@ -303,10 +303,10 @@ private actor MockServer: EntrySyncService {
     let projected = saved.projecting(estimate, date: "2026-10-12")
     #expect(projected.summary.exactMinutes == 721)
     #expect(projected.summary.billableMinutes == 735)
-    #expect(projected.summary.balanceMinutes == -1679)
+    #expect(projected.summary.balanceMinutes == -1665)
     #expect(projected.summary.completedDays == 1)
     #expect(projected.days[0].status == "in_progress")
-    #expect(projected.days[0].balanceMinutes == -239)
+    #expect(projected.days[0].balanceMinutes == -225)
     #expect(projected.projecting(estimate, date: "2026-10-12").summary.exactMinutes == 721)
     #expect(saved.summary.exactMinutes == 480)
     #expect(saved.projecting(estimate, date: "2025-01-01").summary.exactMinutes == 480)
@@ -365,4 +365,50 @@ private actor MockServer: EntrySyncService {
     payload.breaks = [.init(mode: "range", durationMinutes: nil, start: "23:50", end: "00:10")]
     try reopened.enqueue(date: day, payload: payload)
     #expect(reopened.entry(day).breakMinutes == 20)
+}
+
+@Test @MainActor func projectBookingsSurviveOfflineAndValidateBillableLimit() throws {
+    let (journal, file) = try journal()
+    defer { try? FileManager.default.removeItem(at: file) }
+    try journal.cacheProjects(ProjectCatalog(projects: [Project(id: 1, name: "X"), Project(id: 2, name: "Y")], defaultProjectId: 1))
+    let payload = EntryPayload(checkIn: "08:00", checkOut: "12:00", projectAllocations: [.init(projectId: 2, minutes: 120)], defaultProjectId: 1)
+    try journal.enqueue(date: "2026-10-22", payload: payload)
+    let reopened = try OfflineJournal(file: file)
+    #expect(reopened.entry("2026-10-22").projectAllocations == payload.projectAllocations)
+    #expect(reopened.entry("2026-10-22").defaultProjectId == 1)
+    #expect(reopened.snapshot.projectCatalog?.projects.count == 2)
+    var invalid = payload
+    invalid.projectAllocations = [.init(projectId: 2, minutes: 241)]
+    #expect(invalid.bookingValidation(rounding: 15) != nil)
+    invalid.checkOut = "12:01"
+    #expect(invalid.bookingValidation(rounding: 15) == nil)
+    invalid.projectAllocations = [.init(projectId: 0, minutes: 120)]
+    #expect(invalid.validationMessage != nil)
+    let data = try TracyAPI.encode(EntryPayload(projectAllocations: []))
+    let json = try JSONSerialization.jsonObject(with: data) as! [String: Any]
+    #expect(json["default_project_id"] is NSNull)
+}
+
+@Test func automaticBreakDisappearsWhenCheckoutShortened() {
+    var payload = EntryPayload(checkIn: "08:44", checkOut: "17:00").applyingDefaultBreak(previous: .init())
+    #expect(payload.breaks.first?.automatic == true)
+    payload.checkOut = "14:16"
+    #expect(payload.removingPrematureAutomaticBreaks.breaks.isEmpty)
+    #expect(payload.removingPrematureAutomaticBreaks.exactMinutes == 332)
+    payload.checkOut = "14:44"
+    #expect(payload.removingPrematureAutomaticBreaks.breaks.isEmpty)
+    payload.breaks[0].automatic = false
+    #expect(payload.removingPrematureAutomaticBreaks.breaks.count == 1)
+}
+
+@Test func roundedBillableDayMeetsReviewTarget() throws {
+    let data = try JSONSerialization.data(withJSONObject: [
+        "date": "2026-10-22", "weekday": "Thursday", "is_weekend": false,
+        "is_day_off": false, "is_workday": true, "expected_minutes": 480,
+        "exact_minutes": 474, "billable_minutes": 480, "balance_minutes": 0,
+        "status": "complete", "notes": "",
+    ])
+    let day = try TracyAPI.decoder.decode(DaySummary.self, from: data)
+    #expect(!day.needsAttention(today: "2026-10-23"))
+    #expect(day.label(today: "2026-10-23") == "Entered")
 }

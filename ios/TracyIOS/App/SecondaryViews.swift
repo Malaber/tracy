@@ -68,6 +68,8 @@ struct SettingsView: View {
     var body: some View {
         NavigationStack {
             Form {
+                Section { NavigationLink("Projects") { ProjectsView() } }
+
                 Section("Appearance") {
                     Picker("Color scheme", selection: $appearance) {
                         Text("Follow system").tag("system")
@@ -207,27 +209,31 @@ struct StatisticsView: View {
                         Text("Includes live sign-off estimate").font(.footnote)
                     }
                     Section("\(Clock.title(statistics.start)) – \(Clock.title(statistics.end))") {
-                        LabeledContent("Working time", value: Clock.duration(statistics.summary.exactMinutes))
-                        LabeledContent(
-                            "Billable time", value: Clock.duration(statistics.summary.billableMinutes))
+                        LabeledContent("Billable time", value: Clock.duration(statistics.summary.billableMinutes))
+                        LabeledContent("Exact time", value: Clock.duration(statistics.summary.exactMinutes))
                         LabeledContent(
                             "Full-period target", value: Clock.duration(statistics.summary.targetMinutes))
-                        LabeledContent("Balance", value: Clock.duration(statistics.summary.balanceMinutes))
+                        LabeledContent("Balance", value: Clock.duration(statistics.summary.billableMinutes - statistics.summary.targetMinutes))
                         LabeledContent("Completed days", value: "\(statistics.summary.completedDays)")
                     }
+                    Section("Project billable totals · saved days") {
+                        ForEach(statistics.projectTotals ?? [], id: \.projectId) { total in
+                            LabeledContent(store.projects.first(where: { $0.id == total.projectId })?.name ?? "Project \(total.projectId)", value: Clock.duration(total.minutes))
+                        }
+                    }
                     if period != "year" {
-                        Section("Working time by day") {
+                        Section("Billable time by day") {
                             Chart(statistics.days) { day in
                                 BarMark(
                                     x: .value("Day", Clock.date(day.date)),
-                                    y: .value("Hours", Double(day.exactMinutes) / 60)
+                                    y: .value("Hours", Double(day.billableMinutes) / 60)
                                 )
                                 .foregroundStyle(Color("AccentColor"))
                                 .accessibilityLabel(Clock.title(day.date))
-                                .accessibilityValue(Clock.duration(day.exactMinutes))
+                                .accessibilityValue(Clock.duration(day.billableMinutes))
                             }
                             .frame(height: 200)
-                            .accessibilityLabel("Daily working time")
+                            .accessibilityLabel("Daily billable time")
                         }
                     }
                 }

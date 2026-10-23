@@ -98,6 +98,14 @@
               <p id="emptyBreaks" class="empty-breaks">No breaks added.</p>
             </section>
 
+            <section class="break-section" aria-labelledby="projectsHeading">
+              <div class="section-heading-row"><h2 id="projectsHeading">Project bookings</h2><button id="manageProjects" type="button" class="secondary-button compact">Manage projects</button></div>
+              <label for="dayProject">Book remaining billable time to</label><select id="dayProject"></select>
+              <p>Split billable time between projects. Any remainder goes to the project above.</p>
+              <div id="bookingList" class="break-list"></div>
+              <button id="addBooking" type="button" class="secondary-button compact">+ Book to another project</button>
+              <p id="bookingSummary" aria-live="polite"></p>
+            </section>
             <div class="notes-field">
               <label for="notes">Notes <span>optional</span></label>
               <textarea id="notes" rows="3" maxlength="2000" placeholder="Project, customer, or anything useful for the invoice…"></textarea>
@@ -171,17 +179,18 @@
         </div>
 
         <div class="metric-grid">
-          <article class="metric-card card"><span>Exact time</span><strong id="statExact">—</strong><small id="statCompleted">0 completed days</small></article>
           <article class="metric-card card accent"><span>Billable time</span><strong id="statBillable">—</strong><small>After daily rounding</small></article>
+          <article class="metric-card card"><span>Exact time</span><strong id="statExact">—</strong><small id="statCompleted">0 completed days</small></article>
           <article class="metric-card card"><span>Target</span><strong id="statTarget">—</strong><small id="statWorkdays">0 working days</small></article>
-          <article class="metric-card card"><span>Balance</span><strong id="statBalance">—</strong><small>Exact time vs. target</small></article>
+          <article class="metric-card card"><span>Balance</span><strong id="statBalance">—</strong><small>Billable time vs. target</small></article>
         </div>
 
+        <section class="card"><h2>Project billable totals</h2><p>Saved completed days</p><div id="projectTotals"></div></section>
         <div class="statistics-layout">
           <section class="card chart-card">
             <div class="section-heading-row">
-              <div><p class="eyebrow">Hours by week</p><h2>Actual vs. target</h2></div>
-              <div class="chart-legend"><span><i class="actual"></i>Actual</span><span><i class="target"></i>Target</span></div>
+              <div><p class="eyebrow">Hours by week</p><h2>Billable vs. target</h2></div>
+              <div class="chart-legend"><span><i class="actual"></i>Billable</span><span><i class="target"></i>Target</span></div>
             </div>
             <div id="weeklyChart" class="weekly-chart"></div>
           </section>
@@ -217,6 +226,13 @@
       <a class="nav-item" href="/security"><span>⌾</span>Passkeys</a>
     </nav>
 
+    <dialog id="projectsDialog" class="modal">
+      <div class="modal-heading"><h2>Projects</h2><button id="closeProjects" type="button" class="icon-button" aria-label="Close projects">×</button></div>
+      <p>Default applies to new days. Archiving keeps historical bookings and hides suggestions.</p>
+      <label for="defaultProject">Default project</label><select id="defaultProject"></select>
+      <form id="createProjectForm"><label for="projectName">New project</label><input id="projectName" maxlength="120" required><button type="submit" class="secondary-button">Create project</button></form>
+      <div id="projectCatalog"></div><p id="projectError" role="alert"></p>
+    </dialog>
     <dialog id="settingsDialog" class="modal">
       <form id="settingsForm" method="dialog">
         <div class="modal-heading"><div><p class="eyebrow">Preferences</p><h2>Time settings</h2></div><button class="icon-button close-modal" type="button" aria-label="Close">×</button></div>
