@@ -448,3 +448,26 @@ td strong { font-weight: 760; }
   .auth-card, .dashboard-account-card, .capabilities-card { border-radius: 18px; }
   .passkey-row, .dashboard-section-heading { align-items: stretch; flex-direction: column; }
 }
+
+/* Project management has one padded container; its nested form must not add another. */
+.projects-modal { color: var(--ink); max-height: calc(100dvh - 32px); overflow-y: auto; }
+.project-dialog-content { display: grid; gap: 20px; padding: 26px; }
+.projects-modal .modal-heading { align-items: center; gap: 16px; margin: 0; }
+.projects-modal .modal-heading .icon-button { flex-shrink: 0; }
+.projects-modal .modal-copy { margin: 0; }
+.project-default-field { display: grid; gap: 8px; }
+.projects-modal label { margin: 0; }
+.projects-modal .project-create-form { grid-template-columns: minmax(0, 1fr) auto; gap: 10px; padding: 0; }
+.project-create-form label { grid-column: 1 / -1; }
+.project-create-form input { min-width: 0; }
+.project-catalog { display: grid; }
+.project-catalog-row { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 14px 0; border-top: 1px solid var(--line); }
+.project-catalog-row:last-child { padding-bottom: 0; }
+.project-catalog-name { min-width: 0; overflow-wrap: anywhere; font-size: 14px; font-weight: 600; }
+.project-catalog-row button { flex-shrink: 0; min-height: 40px; }
+.projects-modal #projectError { margin: 0; }
+.projects-modal #projectError:empty, .project-catalog:empty { display: none; }
+@media (max-width: 480px) {
+  .project-dialog-content { padding: 20px; }
+  .projects-modal .project-create-form { grid-template-columns: minmax(0, 1fr); }
+}
