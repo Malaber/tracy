@@ -226,12 +226,25 @@
       <a class="nav-item" href="/security"><span>⌾</span>Passkeys</a>
     </nav>
 
-    <dialog id="projectsDialog" class="modal">
-      <div class="modal-heading"><h2>Projects</h2><button id="closeProjects" type="button" class="icon-button" aria-label="Close projects">×</button></div>
-      <p>Default applies to new days. Archiving keeps historical bookings and hides suggestions.</p>
-      <label for="defaultProject">Default project</label><select id="defaultProject"></select>
-      <form id="createProjectForm"><label for="projectName">New project</label><input id="projectName" maxlength="120" required><button type="submit" class="secondary-button">Create project</button></form>
-      <div id="projectCatalog"></div><p id="projectError" role="alert"></p>
+    <dialog id="projectsDialog" class="modal projects-modal" aria-labelledby="projectDialogHeading">
+      <div class="project-dialog-content">
+        <div class="modal-heading">
+          <h2 id="projectDialogHeading">Projects</h2>
+          <button id="closeProjects" type="button" class="icon-button" aria-label="Close projects">×</button>
+        </div>
+        <p class="modal-copy">Default applies to new days. Archiving keeps historical bookings and hides suggestions.</p>
+        <div class="project-default-field">
+          <label for="defaultProject">Default project</label>
+          <select id="defaultProject"></select>
+        </div>
+        <form id="createProjectForm" class="project-create-form">
+          <label for="projectName">New project</label>
+          <input id="projectName" maxlength="120" required>
+          <button type="submit" class="secondary-button">Create project</button>
+        </form>
+        <div id="projectCatalog" class="project-catalog"></div>
+        <p id="projectError" class="form-error" role="alert"></p>
+      </div>
     </dialog>
     <dialog id="settingsDialog" class="modal">
       <form id="settingsForm" method="dialog">

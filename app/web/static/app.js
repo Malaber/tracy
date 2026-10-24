@@ -436,8 +436,10 @@ function renderProjects() {
   renderProjectOptions(byId("defaultProject"), state.projects.default_project_id);
   byId("projectCatalog").replaceChildren();
   for (const project of state.projects.projects) {
-    const row = document.createElement("p");
+    const row = document.createElement("div");
+    row.className = "project-catalog-row";
     const label = document.createElement("span");
+    label.className = "project-catalog-name";
     label.textContent = project.name + (project.archived ? " (archived) " : " ");
     const button = document.createElement("button");
     button.type = "button";
