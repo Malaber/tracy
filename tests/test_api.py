@@ -324,3 +324,88 @@ async def test_saved_default_break_uses_six_hour_boundary(client, checkout, dedu
     )
     assert response.status_code == 200
     assert response.json()["break_minutes"] == deduction
+
+
+@pytest.mark.asyncio
+async def test_project_sessions_example_and_safe_legacy_edit(client):
+    projects = []
+    for name in ("Session X", "Session Y"):
+        catalog = (await client.post("/api/v1/projects", json={"name": name})).json()
+        projects.append(next(p["id"] for p in catalog["projects"] if p["name"] == name))
+    x, y = projects
+    sessions = [
+        {"project_id": x, "start": 480, "end": 630},
+        {"project_id": y, "start": 645, "end": 1140},
+        {"project_id": x, "start": 1170, "end": 1200},
+    ]
+    url = "/api/v1/entries/2026-10-28"
+    result = await client.put(url, json={"sessions": sessions})
+    assert result.status_code == 200, result.text
+    entry = result.json()
+    assert entry["exact_minutes"] == entry["billable_minutes"] == 645
+    assert entry["break_minutes"] == 30
+    assert entry["project_bookings"] == [
+        {"project_id": x, "minutes": 180},
+        {"project_id": y, "minutes": 465},
+    ]
+    assert entry["check_in"] == "08:00" and entry["check_out"] == "20:00"
+    assert (await client.get(url)).json()["sessions"] == entry["sessions"]
+    stats = (await client.get("/api/v1/statistics?period=week&anchor=2026-10-28")).json()
+    assert stats["summary"]["billable_minutes"] == 645
+    assert stats["project_totals"] == entry["project_bookings"]
+    assert (
+        await client.put(url, json={"check_in": "08:00", "check_out": "20:00"})
+    ).status_code == 409
+    assert (await client.post(url + "/check-in")).status_code == 409
+    assert (await client.post(url + "/check-out")).status_code == 409
+    sessions[1]["end"] = 977  # 5h32: no automatic break
+    changed = (await client.put(url, json={"sessions": sessions})).json()
+    assert changed["break_minutes"] == 0
+    sessions[1]["break_minutes"] = 20
+    assert (await client.put(url, json={"sessions": sessions})).json()["break_minutes"] == 20
+    sessions[1]["break_minutes"] = 0
+    assert (await client.put(url, json={"sessions": sessions})).json()["break_minutes"] == 0
+
+
+@pytest.mark.asyncio
+async def test_session_validation_and_revision(client):
+    url = "/api/v1/entries/2026-10-29"
+    for sessions in (
+        [{"start": 480, "end": 600}, {"start": 590, "end": 620}],
+        [{"start": 480}, {"start": 600}],
+        [{"start": 480, "end": 480}],
+        [{"start": 480, "end": 500, "break_minutes": 20}],
+        [{"start": -1, "end": 100}],
+        [{"start": 480, "end": 500, "project_id": 999999}],
+    ):
+        assert (await client.put(url, json={"sessions": sessions})).status_code in (404, 422)
+    sessions = [{"start": 1380, "end": 1500}, {"start": 1530}]
+    entry = (await client.put(url, json={"sessions": sessions})).json()
+    assert entry["status"] == "in_progress"
+    assert entry["exact_minutes"] == 120
+    assert (
+        await client.put(url, json={"sessions": []}, headers={"If-Match": "stale"})
+    ).status_code == 409
+    assert (
+        await client.put(url, json={"sessions": []}, headers={"If-Match": entry["revision"]})
+    ).json()["status"] == "empty"
+
+
+def test_session_rounding_and_six_hour_boundary():
+    from app.services.work_sessions import session_totals
+
+    for span, deduction in [(332, 0), (360, 0), (361, 30)]:
+        assert session_totals([{"start": 480, "end": 480 + span}], 15)["break_minutes"] == deduction
+    result = session_totals(
+        [
+            {"start": 480, "end": 481, "project_id": 1},
+            {"start": 500, "end": 501, "project_id": 2},
+            {"start": 520, "end": None, "project_id": 3},
+        ],
+        15,
+    )
+    assert result["billable_minutes"] == 15
+    assert result["project_bookings"] == [
+        {"project_id": 1, "minutes": 1},
+        {"project_id": 2, "minutes": 14},
+    ]

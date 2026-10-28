@@ -64,7 +64,16 @@ class ProjectAllocation(BaseModel):
     minutes: int = Field(gt=0, le=2880)
 
 
+class WorkSession(BaseModel):
+    project_id: int | None = Field(default=None, gt=0)
+    start: int = Field(ge=0, lt=2880)
+    end: int | None = Field(default=None, gt=0, le=2880)
+    # None means automatic; zero explicitly removes a break.
+    break_minutes: int | None = Field(default=None, ge=0, le=1440)
+
+
 class WorkEntryPayload(BaseModel):
+    sessions: list[WorkSession] | None = Field(default=None, max_length=50)
     check_in: str | None = None
     check_out: str | None = None
     check_out_next_day: bool = False
@@ -83,6 +92,11 @@ class WorkEntryPayload(BaseModel):
 
     @model_validator(mode="after")
     def validate_calculation(self) -> "WorkEntryPayload":
+        if self.sessions is not None:
+            from app.services.work_sessions import session_totals
+
+            session_totals([item.model_dump() for item in self.sessions], 15)
+            return self
         start, end = parse_clock_time(self.check_in), parse_clock_time(self.check_out)
         if (
             start is not None

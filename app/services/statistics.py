@@ -78,7 +78,7 @@ def build_statistics(
             completed_days += 1
         total_exact += exact
         total_billable += billable
-        if entry.get("status") == "complete":
+        if entry.get("status") == "complete" or entry.get("sessions") is not None:
             for booking in entry.get("project_bookings", []):
                 project_totals[booking["project_id"]] += booking["minutes"]
 

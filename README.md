@@ -102,11 +102,19 @@ capture and publish downloadable workflow artifacts; releases additionally attac
 the ZIP to the exact release tag. A failed capture fails its job and publishes no
 partial screenshot archive. App Store uploads remain manual.
 
+### Timed project sessions
+
+Web and iOS check-in/check-out controls have a chevron for choosing a project and a past or future time. Check in again after checkout to start a new session, including another session on the same project. The global default is selected for new sessions. Checkout can also correct the current session's project. Edit the individual sessions in the day editor; overlapping sessions are rejected and only the last session can remain open.
+
+Gaps between sessions are not working time or deducted breaks. Each session longer than six hours gets a 30-minute automatic break charged to that session's project; exactly six hours does not. Override its break minutes (including zero) in the editor. Daily billable time is rounded once, with any rounding remainder assigned to the last completed session's project. For 08:00–10:30 on X, 10:45–19:00 on Y, and 19:30–20:00 on X: X gets 3h, Y gets 7h45, and the day totals 10h45.
+
+Migration `0008_work_sessions` adds nullable session storage without rewriting existing days. Existing manual project allocations remain editable in their original form; they cannot be converted automatically to timed sessions because their timestamps are unknown. iOS retains sessions offline and waits for a server advertising `work_sessions` before syncing. Older clients cannot overwrite a session day with the old single-span format.
+
 ### Project bookings
 
 Web and iOS support multiple project bookings per day. Enter billable minutes (120 for two hours), and choose the project that receives the remaining rounded daily total. A global default applies to new days; changing it never rewrites historical assignments. With no default, remaining minutes stay unassigned. Bookings cannot exceed a completed day's billable total. Ongoing days may contain planned bookings; checkout requires enough billable time or reduced bookings.
 
-Projects can be created, made default, archived, and unarchived. Archived names stay on historical bookings but are excluded from new suggestions. Archiving the global default clears that default. Project totals in Statistics cover saved completed days. Existing project bookings work through the iOS offline queue; creating/managing projects requires a connection.
+Projects can be created, made default, archived, and unarchived. Archived names stay on historical bookings but are excluded from new suggestions. Archiving the global default clears that default. Project totals in Statistics cover saved completed days and completed sessions on ongoing session days. Existing project bookings work through the iOS offline queue; creating/managing projects requires a connection.
 
 Deploy the API migration before using project booking features in TestFlight. The app keeps ordinary tracking compatible with older servers and does not sync project bookings to servers lacking support.
 

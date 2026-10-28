@@ -32,6 +32,7 @@ public struct WorkEntry: Codable, Equatable, Identifiable, Sendable {
     public var exactMinutes: Int?
     public var billableMinutes: Int?
     public var status: String
+    public var sessions: [WorkSession]?
     public var projectAllocations: [ProjectAllocation]?
     public var defaultProjectId: Int?
     public var notes: String
@@ -48,7 +49,7 @@ public struct WorkEntry: Codable, Equatable, Identifiable, Sendable {
     public var payload: EntryPayload {
         EntryPayload(
             checkIn: checkIn, checkOut: checkOut, checkOutNextDay: checkOutNextDay, breaks: breaks,
-            notes: notes, projectAllocations: projectAllocations, defaultProjectId: defaultProjectId)
+            notes: notes, projectAllocations: projectAllocations, defaultProjectId: defaultProjectId, sessions: sessions)
     }
 }
 
@@ -57,14 +58,16 @@ public struct EntryPayload: Codable, Equatable, Sendable {
     public var checkOut: String?
     public var checkOutNextDay: Bool
     public var breaks: [WorkBreak]
+    public var sessions: [WorkSession]?
     public var projectAllocations: [ProjectAllocation]?
     public var defaultProjectId: Int?
     public var notes: String
 
     public init(
         checkIn: String? = nil, checkOut: String? = nil, checkOutNextDay: Bool = false,
-        breaks: [WorkBreak] = [], notes: String = "", projectAllocations: [ProjectAllocation]? = nil, defaultProjectId: Int? = nil
+        breaks: [WorkBreak] = [], notes: String = "", projectAllocations: [ProjectAllocation]? = nil, defaultProjectId: Int? = nil, sessions: [WorkSession]? = nil
     ) {
+        self.sessions = sessions
         self.checkIn = checkIn
         self.checkOut = checkOut
         self.checkOutNextDay = checkOutNextDay
@@ -75,10 +78,11 @@ public struct EntryPayload: Codable, Equatable, Sendable {
     }
 
     enum CodingKeys: String, CodingKey {
-        case checkIn, checkOut, checkOutNextDay, breaks, notes, projectAllocations, defaultProjectId
+        case checkIn, checkOut, checkOutNextDay, breaks, notes, projectAllocations, defaultProjectId, sessions
     }
     public func encode(to encoder: Encoder) throws {
         var values = encoder.container(keyedBy: CodingKeys.self)
+        try values.encodeIfPresent(sessions, forKey: .sessions)
         try values.encode(checkIn, forKey: .checkIn)
         try values.encode(checkOut, forKey: .checkOut)
         try values.encode(checkOutNextDay, forKey: .checkOutNextDay)
@@ -89,6 +93,7 @@ public struct EntryPayload: Codable, Equatable, Sendable {
     }
 
     public var exactMinutes: Int? {
+        if let sessions { return sessionValidation == nil ? sessions.reduce(0) { $0 + $1.exact } : nil }
         guard validationMessage == nil, let start = checkIn.flatMap(Clock.minutes),
               let end = checkOut.flatMap(Clock.minutes) else { return nil }
         let deduction = breaks.reduce(0) { sum, item in
@@ -112,6 +117,7 @@ public struct EntryPayload: Codable, Equatable, Sendable {
     }
 
     public var validationMessage: String? {
+        if sessions != nil { return notes.count > 2000 ? "Keep notes to 2,000 characters." : sessionValidation }
         if let allocations = projectAllocations,
             allocations.count > 50 || allocations.contains(where: { $0.projectId <= 0 || $0.minutes <= 0 || $0.minutes > 2880 }) {
             return "Choose a project and a positive duration for every booking (up to 50)."
@@ -149,6 +155,15 @@ public struct EntryPayload: Codable, Equatable, Sendable {
 
     /// Reopen the same day's entry, optionally retaining time away as a break.
     public func reopened(resumeAt: String? = nil) throws -> Self {
+        if var sessions, let last = sessions.last, last.end != nil {
+            if let resumeAt, let minute = Clock.minutes(resumeAt) {
+                return try sessionAction(checkOut: false, minute: minute, projectId: last.projectId)
+            }
+            sessions[sessions.count - 1].end = nil
+            var result = self
+            result.sessions = sessions
+            return result.normalizedSessions
+        }
         guard checkIn != nil, let checkout = checkOut, !checkOutNextDay,
             validationMessage == nil else {
             throw TracyError.server("Only a completed same-day entry can be reopened.")
@@ -171,6 +186,7 @@ public struct EntryPayload: Codable, Equatable, Sendable {
     }
 
     public var removingPrematureAutomaticBreaks: Self {
+        if sessions != nil { return normalizedSessions }
         guard let start = checkIn.flatMap(Clock.minutes), let end = checkOut.flatMap(Clock.minutes),
               end + (checkOutNextDay ? 1440 : 0) - start <= 360 else { return self }
         var result = self
@@ -179,6 +195,7 @@ public struct EntryPayload: Codable, Equatable, Sendable {
     }
 
     public func applyingDefaultBreak(previous: EntryPayload) -> Self {
+        if sessions != nil { return normalizedSessions }
         let cleaned = removingPrematureAutomaticBreaks
         if cleaned != self { return cleaned.applyingDefaultBreak(previous: previous) }
         guard previous.checkIn == nil || previous.checkOut == nil,
@@ -199,6 +216,18 @@ public struct SignOffEstimate: Equatable, Sendable {
     public var progress: Double { min(1, max(0, Double(exactMinutes) / 480)) }
 
     public static func project(_ entry: WorkEntry, now: Date, timezone: String, rounding: Int = 15) -> Self? {
+        if let sessions = entry.sessions, let last = sessions.last, last.end == nil,
+            entry.date == Clock.day(now, timezone: timezone) {
+            let parts = Clock.calendar(timezone: timezone).dateComponents([.hour, .minute], from: now)
+            let minute = parts.hour! * 60 + parts.minute!
+            guard minute >= last.start else { return nil }
+            var projected = sessions
+            projected[projected.count - 1].end = minute
+            let exact = projected.reduce(0) { $0 + $1.exact }
+            let increment = max(1, rounding)
+            return Self(exactMinutes: exact, billableMinutes: (exact + increment - 1) / increment * increment,
+                        breakMinutes: projected.reduce(0) { $0 + $1.deduction })
+        }
         guard entry.date == Clock.day(now, timezone: timezone), entry.checkOut == nil,
             let start = entry.checkIn.flatMap(Clock.minutes) else { return nil }
         let time = Clock.calendar(timezone: timezone).dateComponents([.hour, .minute], from: now)
@@ -293,6 +322,7 @@ extension Statistics {
 }
 
 public struct ServerMeta: Decodable, Sendable {
+    public var workSessions: Bool?
     public let projectBookings: Bool?
     public let timezone: String
 }

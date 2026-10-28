@@ -91,6 +91,7 @@ struct SyncStatus: View {
 struct TodayView: View {
     @EnvironmentObject private var store: AppStore
     @State private var editing: WorkEntry?
+    @State private var showSessionAction = false
     @State private var showVacation = false
     private var entry: WorkEntry { store.entry(store.today) }
 
@@ -126,25 +127,28 @@ struct TodayView: View {
                         .tint(Color(hue: (35 + 105 * progress) / 360, saturation: 0.75, brightness: 0.75))
                         .accessibilityLabel("8-hour working day")
                         .accessibilityValue("\(Int(progress * 100)) percent")
-                        if entry.checkIn == nil || entry.checkOut == nil {
-                            Button {
-                                store.quickAction(checkOut: entry.checkIn != nil)
-                            } label: {
-                                LayoutCheckedText(
-                                    entry.checkIn == nil ? "Check in now" : "Check out now", key: "action"
-                                )
-                                .font(.headline).frame(maxWidth: .infinity).padding(.vertical, 8)
+                        let checkingOut = entry.checkIn != nil && entry.checkOut == nil
+                        HStack(spacing: 0) {
+                            Button { store.quickAction(checkOut: checkingOut) } label: {
+                                LayoutCheckedText(checkingOut ? "Check out now" : "Check in now", key: "action")
+                                    .font(.headline).frame(maxWidth: .infinity).padding(.vertical, 8)
+                            }.accessibilityIdentifier("quickAction")
+                            Divider().frame(height: 28)
+                            Button { showSessionAction = true } label: {
+                                Image(systemName: "chevron.down").frame(width: 44, height: 44)
                             }
-                            .modifier(PrimaryActionStyle())
-                            .accessibilityIdentifier("quickAction")
-                        } else if !entry.checkOutNextDay {
-                            Button("Resume work") { store.reopenToday(recordGap: true) }
-                                .modifier(PrimaryActionStyle())
-                                .accessibilityIdentifier("resumeWork")
-                            Text("Time since checkout will be added as a break.").font(.footnote)
+                            .accessibilityLabel(checkingOut ? "Checkout project and time options" : "Check-in project and time options")
+                            .accessibilityIdentifier("sessionActionOptions")
+                        }.modifier(PrimaryActionStyle())
+                        if entry.checkOut != nil {
                             Button("Undo checkout") { store.reopenToday(recordGap: false) }
                                 .accessibilityIdentifier("undoCheckout")
                         }
+                        if let projectId = entry.sessions?.last?.projectId,
+                           let project = store.projects.first(where: { $0.id == projectId }) {
+                            Text(project.name).font(.footnote)
+                        }
+
                     }
                     .padding(.vertical, 8)
                 }
@@ -154,6 +158,10 @@ struct TodayView: View {
                         "Check-out",
                         value: (entry.checkOut ?? "Not entered")
                             + (entry.checkOutNextDay ? " · next day" : ""))
+                    ForEach(Array((entry.sessions ?? []).enumerated()), id: \.offset) { _, session in
+                        let project = store.projects.first { $0.id == session.projectId }?.name ?? "Unassigned"
+                        LabeledContent(project, value: "\(WorkSession.clock(session.start)) – \(session.end.map(WorkSession.clock) ?? "Working")")
+                    }
                     if !entry.notes.isEmpty { Text(entry.notes) }
                     Button {
                         editing = entry
@@ -209,6 +217,9 @@ struct TodayView: View {
                     Button("Vacation", systemImage: "calendar.badge.plus") { showVacation = true }
                         .accessibilityIdentifier("manageVacation")
                 }
+            }
+            .sheet(isPresented: $showSessionAction) {
+                SessionActionSheet(checkOut: entry.checkIn != nil && entry.checkOut == nil)
             }
             .sheet(isPresented: $showVacation) { VacationEditor(initialDay: store.today) }
             .refreshable { await store.refresh() }

@@ -471,3 +471,18 @@ td strong { font-weight: 760; }
   .project-dialog-content { padding: 20px; }
   .projects-modal .project-create-form { grid-template-columns: minmax(0, 1fr); }
 }
+
+.time-actions { display:flex; align-items:center; gap:8px; }
+.time-actions button { min-height:36px; min-width:36px; }
+.session-row { display:grid; grid-template-columns:1fr 1fr; gap:12px; padding:18px 0; border-bottom:1px solid var(--line); }
+.session-row label { display:grid; gap:6px; }
+.session-row input[type=checkbox] { width:auto; justify-self:start; }
+.session-row strong, .session-row > label:first-of-type { grid-column:1 / -1; }
+@media(max-width:480px) { .session-row { grid-template-columns:minmax(0,1fr); } }
+
+.session-row .session-checkbox, .modal .session-checkbox { display:flex; align-items:center; gap:8px; }
+.session-checkbox input[type=checkbox] { width:16px; height:16px; min-height:0; padding:0; flex-shrink:0; }
+.session-result { grid-column:1 / -1; margin:0; color:var(--muted); font-size:13px; }
+#sessionSection > p { color:var(--muted); font-size:13px; line-height:1.5; }
+#sessionActionError:empty { display:none; }
+#sessionActionDialog { max-height:calc(100dvh - 32px); overflow:auto; color:var(--ink); }

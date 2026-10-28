@@ -67,7 +67,7 @@
               <div class="time-field">
                 <div class="field-label-row">
                   <label for="checkIn">Check in</label>
-                  <button id="checkInNow" class="text-button" type="button">Now</button>
+                  <span class="time-actions"><button id="checkInNow" class="text-button" type="button">Now</button><button id="checkInOptions" class="text-button" type="button" aria-label="Check-in project and time options" aria-haspopup="dialog">⌄</button></span>
                 </div>
                 <input id="checkIn" type="time" step="60" autocomplete="off">
               </div>
@@ -75,7 +75,7 @@
               <div class="time-field">
                 <div class="field-label-row">
                   <label for="checkOut">Check out</label>
-                  <button id="checkOutNow" class="text-button" type="button">Now</button>
+                  <span class="time-actions"><button id="checkOutNow" class="text-button" type="button">Now</button><button id="checkOutOptions" class="text-button" type="button" aria-label="Check-out project and time options" aria-haspopup="dialog">⌄</button></span>
                 </div>
                 <input id="checkOut" type="time" step="60" autocomplete="off">
               </div>
@@ -86,6 +86,11 @@
               <span>Check-out is on the following day</span>
             </label>
 
+            <section id="sessionSection" class="break-section" hidden>
+              <h2>Project sessions</h2>
+              <p>Gaps are unbilled. Each session over six hours gets a 30-minute break. Enter 0 to remove it.</p>
+              <div id="sessionList"></div>
+            </section>
             <section class="break-section" aria-labelledby="breakHeading">
               <div class="section-heading-row">
                 <div>
@@ -226,6 +231,16 @@
       <a class="nav-item" href="/security"><span>⌾</span>Passkeys</a>
     </nav>
 
+    <dialog id="sessionActionDialog" class="modal" aria-labelledby="sessionActionHeading">
+      <form id="sessionActionForm">
+        <div class="modal-heading"><h2 id="sessionActionHeading">Check in</h2><button type="button" id="closeSessionAction" class="icon-button" aria-label="Close">×</button></div>
+        <label for="sessionActionProject">Project</label><select id="sessionActionProject"></select>
+        <label for="sessionActionTime">Time</label><input id="sessionActionTime" type="time" required>
+        <label class="session-checkbox"><input id="sessionActionNextDay" type="checkbox"> Next day</label>
+        <p id="sessionActionError" class="form-error" role="alert"></p>
+        <button type="submit" class="primary-button">Save</button>
+      </form>
+    </dialog>
     <dialog id="projectsDialog" class="modal projects-modal" aria-labelledby="projectDialogHeading">
       <div class="project-dialog-content">
         <div class="modal-heading">

@@ -4,6 +4,8 @@ import test from "node:test";
 
 import {
   calculateDraft,
+  calculateSessions,
+  sessionAction,
   projectEntry,
   projectStatistics,
   dayProgress,
@@ -254,6 +256,87 @@ test("web project bookings preserve defaults and automatic breaks disappear on s
     for (const [key, value] of Object.entries(originals)) {
       if (value === undefined) delete globalThis[key]; else globalThis[key] = value;
     }
+    dom.window.close();
+  }
+});
+
+
+test("project sessions preserve repeated projects, exclude gaps and deduct only long-session breaks", () => {
+  let entry = { sessions: [], breaks: [] };
+  for (const [action, minute, project] of [["check-in",480,1],["check-out",630,1],["check-in",645,2],["check-out",1140,2],["check-in",1170,1],["check-out",1200,1]]) {
+    entry.sessions = sessionAction(entry, action, minute, project);
+  }
+  assert.deepEqual(calculateSessions(entry.sessions), {exact:645,billable:645,breakMinutes:30});
+  entry.sessions[1].end = 977;
+  assert.equal(calculateSessions(entry.sessions).breakMinutes,0);
+  entry.sessions[1].break_minutes = 0;
+  entry.sessions[1].end = 1140;
+  assert.equal(calculateSessions(entry.sessions).breakMinutes,0);
+  assert.throws(() => sessionAction(entry,"check-in",1199,1), /overlap/);
+  entry.sessions = sessionAction(entry,"check-in",1230,2);
+  assert.throws(() => sessionAction(entry,"check-in",1240,2), /Check out/);
+  const projected = projectEntry({...entry,date:"2026-10-28"},{date:"2026-10-28",clock:"21:00"});
+  assert.equal(projected.exact,705);
+});
+
+
+test("session UI saves chosen project and time, renders editable sessions, and keeps revision headers", async () => {
+  const { JSDOM } = await import("jsdom");
+  const dom = new JSDOM(await fs.readFile(new URL("../templates/index.html", import.meta.url), "utf8"), {url:"https://tracy.example"});
+  const keys = ["document","location","fetch","setInterval"];
+  const originals = Object.fromEntries(keys.map(key => [key,globalThis[key]]));
+  let tick, writes = 0;
+  let entry = {date:"2026-10-28",revision:"r0",saved:false,check_in:null,check_out:null,breaks:[],status:"empty"};
+  try {
+    globalThis.document = dom.window.document;
+    globalThis.location = dom.window.location;
+    globalThis.setInterval = fn => {tick=fn;};
+    dom.window.HTMLDialogElement.prototype.showModal = function() { this.open=true; };
+    dom.window.HTMLDialogElement.prototype.close = function() { this.open=false; };
+    globalThis.fetch = async (url,options) => {
+      let data;
+      if(url.endsWith("/meta")) data={timezone:"UTC",federal_states:{}};
+      else if(url.endsWith("/preferences")) data={rounding_minutes:15};
+      else if(url.endsWith("/projects")) data={projects:[{id:1,name:"X"},{id:2,name:"Y"},{id:3,name:"Archived",archived:true}],default_project_id:1};
+      else if(url.includes("/statistics?")) data={summary:{billable_minutes:0,exact_minutes:0,target_minutes:2400},days:[]};
+      else if(options.method === "PUT") {
+        assert.equal(options.headers["Content-Type"],"application/json");
+        assert.equal(options.headers["If-Match"],entry.revision);
+        const draft=JSON.parse(options.body);
+        const last=draft.sessions.at(-1);
+        const clock = minute => `${String(Math.floor(minute/60)).padStart(2,"0")}:${String(minute%60).padStart(2,"0")}`;
+        entry={...entry,...draft,saved:true,revision:`r${++writes}`,check_in:clock(draft.sessions[0].start),check_out:last.end == null ? null : clock(last.end),breaks:[],status:last.end == null ? "in_progress":"complete"};
+        data=entry;
+      } else data=entry;
+      return {ok:true,json:async()=>structuredClone(data)};
+    };
+    await import(`./app.js?session-ui=${Date.now()}`);
+    for(let i=0;i<100 && !tick;i++) await new Promise(resolve=>setImmediate(resolve));
+    const el=id=>document.getElementById(id);
+    for(const [action,time,project] of [["In","08:00","1"],["Out","10:30","1"],["In","10:45","2"],["Out","19:00","2"],["In","19:30","1"],["Out","20:00","1"]]) {
+      el(`check${action}Options`).click();
+      assert.equal(el("sessionActionDialog").open,true);
+      assert.ok(!el("sessionActionProject").textContent.includes("Archived"));
+      el("sessionActionProject").value=project;
+      el("sessionActionTime").value=time;
+      el("sessionActionForm").dispatchEvent(new dom.window.Event("submit",{cancelable:true}));
+      for(let i=0;i<30 && el("sessionActionDialog").open;i++) await new Promise(resolve=>setImmediate(resolve));
+      assert.equal(el("sessionActionDialog").open,false);
+    }
+    assert.equal(writes,6);
+    assert.equal(el("sessionList").children.length,3);
+    assert.equal(el("billableHours").textContent,"10.75");
+    assert.equal(el("sessionSection").hidden,false);
+    assert.equal(el("checkIn").disabled,true);
+    const deduction=el("sessionList").children[1].querySelector(".session-break");
+    deduction.value="0";
+    deduction.dispatchEvent(new dom.window.Event("input",{bubbles:true}));
+    assert.equal(el("billableHours").textContent,"11.25");
+    el("saveEntry").click();
+    await new Promise(resolve=>setImmediate(resolve));
+    assert.equal(entry.sessions[1].break_minutes,0);
+  } finally {
+    for(const [key,value] of Object.entries(originals)) { if(value===undefined) delete globalThis[key]; else globalThis[key]=value; }
     dom.window.close();
   }
 });

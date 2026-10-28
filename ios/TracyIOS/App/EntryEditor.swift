@@ -31,7 +31,7 @@ struct EntryEditor: View {
     private var preparedDraft: EntryPayload {
         var result = draft.removingPrematureAutomaticBreaks
         result.projectAllocations = bookings.map { ProjectAllocation(projectId: $0.projectId, minutes: $0.minutes) }
-        return result
+        return result.normalizedSessions
     }
     private var changed: Bool {
         var original = entry.payload
@@ -70,87 +70,91 @@ struct EntryEditor: View {
                         showVacation = true
                     }.accessibilityIdentifier("entryVacation")
                 }
-                Section("Working time") {
-                    Toggle(
-                        "Check-in entered",
-                        isOn: Binding(
-                            get: { draft.checkIn != nil },
-                            set: { enabled in
-                                draft.checkIn = enabled ? "08:00" : nil
-                            }))
-                    if draft.checkIn != nil { ClockPicker(title: "Check-in", value: clockBinding(\.checkIn)) }
-                    Toggle(
-                        "Check-out entered",
-                        isOn: Binding(
-                            get: { draft.checkOut != nil },
-                            set: { enabled in
-                                draft.checkOut = enabled ? "17:00" : nil
-                                if !enabled { draft.checkOutNextDay = false }
-                            }))
-                    if draft.checkOut != nil {
-                        ClockPicker(title: "Check-out", value: clockBinding(\.checkOut))
-                        Toggle("Check-out is next day", isOn: $draft.checkOutNextDay)
-                    }
-                }
-                Section {
-                    ForEach(breakIDs, id: \.self) { id in
-                        let index = breakIDs.firstIndex(of: id) ?? 0
-                        let item = breakBinding(id)
-                        VStack(alignment: .leading, spacing: 12) {
-                            Picker("Break \(index + 1)", selection: Binding(
-                                get: { item.wrappedValue.mode },
-                                set: { mode in
-                                    item.wrappedValue = mode == "duration" ? WorkBreak()
-                                        : WorkBreak(mode: "range", durationMinutes: nil,
-                                                    start: "12:00", end: "12:30")
-                                })) {
-                                Text("Duration").tag("duration")
-                                Text("Start and end").tag("range")
-                            }
-                            if item.wrappedValue.mode == "duration" {
-                                Stepper("\(item.wrappedValue.durationMinutes ?? 30) minutes",
-                                    value: Binding(
-                                        get: { item.wrappedValue.durationMinutes ?? 30 },
-                                        set: { value in
-                                            if value == 0 { breakToRemove = id }
-                                            else { item.wrappedValue.durationMinutes = value; item.wrappedValue.automatic = false }
-                                        }), in: 0...1440)
-                                    .accessibilityLabel("Break \(index + 1) duration")
-                                    .accessibilityValue("\(item.wrappedValue.durationMinutes ?? 30) minutes")
-                                    .accessibilityIdentifier("breakDuration\(index + 1)")
-                            } else {
-                                ClockPicker(title: "Break starts", value: Binding(
-                                    get: { item.wrappedValue.start ?? "12:00" },
-                                    set: { item.wrappedValue.start = $0 }))
-                                ClockPicker(title: "Break ends", value: Binding(
-                                    get: { item.wrappedValue.end ?? "12:30" },
-                                    set: { item.wrappedValue.end = $0 }))
-                            }
-                            Button("Remove break \(index + 1)", role: .destructive) {
-                                removeBreak(id)
-                            }
-                            .buttonStyle(.borderless)
-                            .accessibilityIdentifier("removeBreak\(index + 1)")
-                        }
-                        .padding(.vertical, 6)
-                        .swipeActions {
-                            Button("Delete", role: .destructive) { removeBreak(id) }
+                if draft.sessions != nil {
+                    SessionEditorSection(sessions: Binding(get: { draft.sessions ?? [] }, set: { draft.sessions = $0 }))
+                } else {
+                    Section("Working time") {
+                        Toggle(
+                            "Check-in entered",
+                            isOn: Binding(
+                                get: { draft.checkIn != nil },
+                                set: { enabled in
+                                    draft.checkIn = enabled ? "08:00" : nil
+                                }))
+                        if draft.checkIn != nil { ClockPicker(title: "Check-in", value: clockBinding(\.checkIn)) }
+                        Toggle(
+                            "Check-out entered",
+                            isOn: Binding(
+                                get: { draft.checkOut != nil },
+                                set: { enabled in
+                                    draft.checkOut = enabled ? "17:00" : nil
+                                    if !enabled { draft.checkOutNextDay = false }
+                                }))
+                        if draft.checkOut != nil {
+                            ClockPicker(title: "Check-out", value: clockBinding(\.checkOut))
+                            Toggle("Check-out is next day", isOn: $draft.checkOutNextDay)
                         }
                     }
-                    Button("Add break", systemImage: "plus") {
-                        draft.breaks.append(WorkBreak())
-                        breakIDs.append(UUID())
+                    Section {
+                        ForEach(breakIDs, id: \.self) { id in
+                            let index = breakIDs.firstIndex(of: id) ?? 0
+                            let item = breakBinding(id)
+                            VStack(alignment: .leading, spacing: 12) {
+                                Picker("Break \(index + 1)", selection: Binding(
+                                    get: { item.wrappedValue.mode },
+                                    set: { mode in
+                                        item.wrappedValue = mode == "duration" ? WorkBreak()
+                                            : WorkBreak(mode: "range", durationMinutes: nil,
+                                                        start: "12:00", end: "12:30")
+                                    })) {
+                                    Text("Duration").tag("duration")
+                                    Text("Start and end").tag("range")
+                                }
+                                if item.wrappedValue.mode == "duration" {
+                                    Stepper("\(item.wrappedValue.durationMinutes ?? 30) minutes",
+                                        value: Binding(
+                                            get: { item.wrappedValue.durationMinutes ?? 30 },
+                                            set: { value in
+                                                if value == 0 { breakToRemove = id }
+                                                else { item.wrappedValue.durationMinutes = value; item.wrappedValue.automatic = false }
+                                            }), in: 0...1440)
+                                        .accessibilityLabel("Break \(index + 1) duration")
+                                        .accessibilityValue("\(item.wrappedValue.durationMinutes ?? 30) minutes")
+                                        .accessibilityIdentifier("breakDuration\(index + 1)")
+                                } else {
+                                    ClockPicker(title: "Break starts", value: Binding(
+                                        get: { item.wrappedValue.start ?? "12:00" },
+                                        set: { item.wrappedValue.start = $0 }))
+                                    ClockPicker(title: "Break ends", value: Binding(
+                                        get: { item.wrappedValue.end ?? "12:30" },
+                                        set: { item.wrappedValue.end = $0 }))
+                                }
+                                Button("Remove break \(index + 1)", role: .destructive) {
+                                    removeBreak(id)
+                                }
+                                .buttonStyle(.borderless)
+                                .accessibilityIdentifier("removeBreak\(index + 1)")
+                            }
+                            .padding(.vertical, 6)
+                            .swipeActions {
+                                Button("Delete", role: .destructive) { removeBreak(id) }
+                            }
+                        }
+                        Button("Add break", systemImage: "plus") {
+                            draft.breaks.append(WorkBreak())
+                            breakIDs.append(UUID())
+                        }
+                        .disabled(draft.breaks.count >= 20 || draft.checkIn == nil)
+                    } header: {
+                        Text("Breaks")
+                    } footer: {
+                        Text(
+                            "When a day is first completed with more than six hours and no break, Tracy adds a 30-minute break. Automatic breaks are removed when a day is shortened to six hours or less. Manual breaks are preserved. Overnight break ranges are supported."
+                        )
                     }
-                    .disabled(draft.breaks.count >= 20 || draft.checkIn == nil)
-                } header: {
-                    Text("Breaks")
-                } footer: {
-                    Text(
-                        "When a day is first completed with more than six hours and no break, Tracy adds a 30-minute break. Automatic breaks are removed when a day is shortened to six hours or less. Manual breaks are preserved. Overnight break ranges are supported."
-                    )
-                }
-                if store.snapshot.projectCatalog != nil {
-                    ProjectBookingSection(defaultProjectId: $draft.defaultProjectId, bookings: $bookings)
+                    if store.snapshot.projectCatalog != nil {
+                        ProjectBookingSection(defaultProjectId: $draft.defaultProjectId, bookings: $bookings)
+                    }
                 }
                 Section("Notes") {
                     TextField("What would you like to remember?", text: $draft.notes, axis: .vertical)

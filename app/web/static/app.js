@@ -70,7 +70,13 @@ export function calculateDraft({ checkIn, checkOut, nextDay, breaks, rounding })
 
 // Projections never populate check-out or persist a default break.
 export function projectEntry(entry, { date, clock }, rounding = 15) {
-  if (!entry || entry.date !== date || !entry.check_in || entry.check_out) return null;
+  if (!entry || entry.date !== date) return null;
+  if (entry.sessions != null) {
+    const last = entry.sessions.at(-1);
+    return last && last.end == null && parseClock(clock) >= last.start
+      ? calculateSessions(entry.sessions, rounding, parseClock(clock)) : null;
+  }
+  if (!entry.check_in || entry.check_out) return null;
   const start = parseClock(entry.check_in);
   const end = parseClock(clock);
   if (end < start) return null;
@@ -78,6 +84,45 @@ export function projectEntry(entry, { date, clock }, rounding = 15) {
   const breaks = entry.breaks.length || end - start <= 360
     ? entry.breaks : [{ mode: "duration", duration_minutes: 30 }];
   return calculateDraft({ checkIn: entry.check_in, checkOut: clock, nextDay: false, breaks, rounding });
+}
+
+export function calculateSessions(sessions, rounding = 15, now = null) {
+  let exact = 0, breakMinutes = 0, previousEnd = 0;
+  for (const [index, session] of sessions.entries()) {
+    if (!Number.isInteger(session.start) || session.start < 0 || session.start >= 2880
+      || session.end != null && (!Number.isInteger(session.end) || session.end > 2880)
+      || session.break_minutes != null && (!Number.isInteger(session.break_minutes) || session.break_minutes < 0 || session.break_minutes > 1440)) throw new Error("Choose valid session times and break minutes.");
+    const end = session.end ?? now;
+    if (session.start < previousEnd || (session.end == null && index !== sessions.length - 1)) throw new Error("Sessions must not overlap; only the last may be open.");
+    if (end == null || end <= session.start && session.end == null) continue;
+    const span = end - session.start;
+    const deduction = session.break_minutes ?? (span > 360 ? 30 : 0);
+    if (span <= 0 || deduction >= span) throw new Error("Checkout must follow check-in and breaks must be shorter than the session.");
+    previousEnd = end;
+    exact += span - deduction;
+    breakMinutes += deduction;
+  }
+  return { exact, billable: roundUp(exact, rounding), breakMinutes };
+}
+
+export function sessionAction(entry, action, minute, projectId) {
+  let sessions = structuredClone(entry.sessions ?? []);
+  if (entry.sessions == null && entry.check_in) {
+    if (entry.project_allocations?.length) throw new Error("This day has manual project bookings. Keep editing it in the day form; start timed sessions on a new day.");
+    const breaks = entry.breaks.reduce((sum, item) => sum + (item.mode === "duration" ? item.duration_minutes : (parseClock(item.end) - parseClock(item.start) + 1440) % 1440), 0);
+    sessions = [{ start: parseClock(entry.check_in), end: entry.check_out ? parseClock(entry.check_out) + (entry.check_out_next_day ? 1440 : 0) : null, project_id: entry.default_project_id, break_minutes: entry.breaks.length && entry.breaks.every(item => item.automatic) ? null : breaks || (entry.check_out ? 0 : null) }];
+  }
+  const last = sessions.at(-1);
+  if (action === "check-out") {
+    if (!last || last.end != null) throw new Error("Check in before checking out.");
+    last.end = minute;
+    last.project_id = projectId;
+  } else {
+    if (last && last.end == null) throw new Error("Check out of the current session first.");
+    sessions.push({start: minute, end: null, project_id: projectId, break_minutes: null});
+  }
+  calculateSessions(sessions);
+  return sessions;
 }
 
 export function dayProgress(minutes) {
@@ -189,8 +234,8 @@ function escapeHtml(value) {
 
 async function api(path, options = {}) {
   const response = await fetch(`/api/v1${path}`, {
-    headers: { "Content-Type": "application/json", ...(options.headers || {}) },
     ...options,
+    headers: { "Content-Type": "application/json", ...(options.headers || {}) },
   });
   if (!response.ok) {
     let message = `Request failed (${response.status}).`;
@@ -334,6 +379,7 @@ function collectBreaks() {
 
 function collectDraft() {
   return {
+    sessions: state.entry?.sessions == null ? null : collectSessions(),
     check_in: byId("checkIn").value.trim() || null,
     check_out: byId("checkOut").value.trim() || null,
     check_out_next_day: byId("nextDayCheckout").checked,
@@ -352,7 +398,7 @@ function updateLiveSummary() {
       updateEmptyBreaks();
       draft = collectDraft();
     }
-    if (needsDefaultBreak({
+    if (draft.sessions == null && needsDefaultBreak({
       checkIn: draft.check_in,
       checkOut: draft.check_out,
       nextDay: draft.check_out_next_day,
@@ -363,13 +409,20 @@ function updateLiveSummary() {
       draft = collectDraft();
     }
     const projection = projectEntry({ ...draft, date: state.currentDate }, serverNow(), state.preferences.rounding_minutes);
-    const calculated = projection ?? calculateDraft({
+    const calculated = projection ?? (draft.sessions != null ? calculateSessions(draft.sessions, state.preferences.rounding_minutes) : calculateDraft({
       checkIn: draft.check_in,
       checkOut: draft.check_out,
       nextDay: draft.check_out_next_day,
       breaks: draft.breaks,
       rounding: state.preferences.rounding_minutes,
-    });
+    }));
+    if (draft.sessions != null) {
+      [...byId("sessionList").children].forEach((row, index) => {
+        const session = draft.sessions[index];
+        const result = calculateSessions([session], 1, state.currentDate === serverNow().date ? parseClock(serverNow().clock) : null);
+        row.querySelector(".session-result").textContent = `${formatDuration(result.exact)} working · ${formatDuration(result.breakMinutes)} break deducted`;
+      });
+    }
     byId("estimateLabel").hidden = !projection;
     const progress = dayProgress(calculated.billable);
     byId("dayProgress").style.width = `${progress.percent}%`;
@@ -478,6 +531,7 @@ function setupProjects() {
 
 function renderEntry(entry) {
   state.entry = entry;
+  renderSessions(entry.sessions);
   if (entry.date === serverNow().date) state.todayEntry = entry;
   byId("checkIn").value = entry.check_in || "";
   byId("checkOut").value = entry.check_out || "";
@@ -520,6 +574,7 @@ async function saveEntry() {
   try {
     renderEntry(await api(`/entries/${state.currentDate}`, {
       method: "PUT",
+      headers: { "If-Match": state.entry?.revision ?? "missing" },
       body: JSON.stringify(collectDraft()),
     }));
     showToast("Working day saved.");
@@ -531,14 +586,67 @@ async function saveEntry() {
   }
 }
 
-async function timeAction(action) {
+async function timeAction(action, minute = parseClock(serverNow().clock), projectId = undefined) {
   showFormError();
   try {
-    renderEntry(await api(`/entries/${state.currentDate}/${action}`, { method: "POST" }));
+    const draft = collectDraft();
+    const entry = { ...state.entry, ...draft };
+    const selected = projectId === undefined ? (action === "check-out" ? (entry.sessions != null ? entry.sessions.at(-1)?.project_id ?? null : entry.default_project_id) : state.projects.default_project_id) : projectId;
+    const sessions = sessionAction(entry, action, minute, selected);
+    renderEntry(await api(`/entries/${state.currentDate}`, {
+      method: "PUT", headers: { "If-Match": state.entry?.revision ?? "missing" },
+      body: JSON.stringify({ ...draft, sessions }),
+    }));
+    byId("sessionActionDialog").close();
     showToast(action === "check-in" ? "Checked in." : "Checked out.");
     await loadWeekSummary();
   } catch (error) {
     showFormError(error.message);
+    byId("sessionActionError").textContent = error.message;
+  }
+}
+
+function openSessionAction(action) {
+  const dialog = byId("sessionActionDialog");
+  dialog.dataset.action = action;
+  byId("sessionActionHeading").textContent = action === "check-in" ? "Check in" : "Check out";
+  byId("sessionActionTime").value = serverNow().clock;
+  byId("sessionActionNextDay").checked = false;
+  renderProjectOptions(byId("sessionActionProject"), action === "check-out" ? (state.entry?.sessions != null ? state.entry.sessions.at(-1)?.project_id ?? null : state.entry?.default_project_id) : state.projects.default_project_id);
+  byId("sessionActionError").textContent = "";
+  dialog.showModal();
+}
+
+function collectSessions() {
+  return [...byId("sessionList").children].map(row => ({
+    project_id: Number(row.querySelector("select").value) || null,
+    start: parseClock(row.querySelector(".session-start").value) + (row.querySelector(".session-start-next").checked ? 1440 : 0),
+    end: row.querySelector(".session-end").value ? parseClock(row.querySelector(".session-end").value) + (row.querySelector(".session-end-next").checked ? 1440 : 0) : null,
+    break_minutes: row.querySelector(".session-break").value === "" ? null : Number(row.querySelector(".session-break").value),
+  }));
+}
+
+function renderSessions(sessions) {
+  const active = sessions != null;
+  byId("sessionSection").hidden = !active;
+  byId("breakHeading").closest("section").hidden = active;
+  byId("projectsHeading").closest("section").hidden = active;
+  for (const id of ["checkIn", "checkOut", "nextDayCheckout"]) byId(id).disabled = active;
+  byId("sessionList").replaceChildren();
+  for (const [index, session] of (sessions ?? []).entries()) {
+    const row = document.createElement("div");
+    row.className = "session-row";
+    row.innerHTML = `<strong>Session ${index + 1}</strong><label>Project<select></select></label><label>Check-in<input class="session-start" type="time" required></label><label class="session-checkbox"><input class="session-start-next" type="checkbox"> Starts next day</label><label>Check-out<input class="session-end" type="time"></label><label class="session-checkbox"><input class="session-end-next" type="checkbox"> Ends next day</label><label>Break minutes<input class="session-break" type="number" min="0" max="1440" placeholder="Automatic after 6 hours"></label><button type="button" class="text-button">Remove session</button><p class="session-result"></p>`;
+    renderProjectOptions(row.querySelector("select"), session.project_id);
+    const clock = value => value == null ? "" : `${String(Math.floor(value % 1440 / 60)).padStart(2,"0")}:${String(value % 60).padStart(2,"0")}`;
+    row.querySelector(".session-start").value = clock(session.start);
+    row.querySelector(".session-end").value = clock(session.end);
+    row.querySelector(".session-start-next").checked = session.start >= 1440;
+    row.querySelector(".session-end-next").checked = session.end >= 1440;
+    row.querySelector(".session-break").value = session.break_minutes ?? "";
+    row.querySelector("button").onclick = () => { row.remove(); updateLiveSummary(); };
+    row.addEventListener("input", updateLiveSummary);
+    byId("sessionList").append(row);
   }
 }
 
@@ -798,6 +906,15 @@ function shiftStatistics(direction) {
 async function initialize() {
   [state.meta, state.preferences, state.projects] = await Promise.all([api("/meta"), api("/preferences"), api("/projects")]);
   setupProjects();
+  byId("checkInOptions").onclick = () => openSessionAction("check-in");
+  byId("checkOutOptions").onclick = () => openSessionAction("check-out");
+  byId("closeSessionAction").onclick = () => byId("sessionActionDialog").close();
+  byId("sessionActionForm").onsubmit = event => {
+    event.preventDefault();
+    timeAction(byId("sessionActionDialog").dataset.action,
+      parseClock(byId("sessionActionTime").value) + (byId("sessionActionNextDay").checked ? 1440 : 0),
+      Number(byId("sessionActionProject").value) || null);
+  };
   state.currentDate = serverNow().date;
   byId("federalState").innerHTML = Object.entries(state.meta.federal_states)
     .map(([code, name]) => `<option value="${code}">${escapeHtml(name)}</option>`).join("");

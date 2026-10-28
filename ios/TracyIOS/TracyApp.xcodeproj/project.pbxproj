@@ -10,6 +10,7 @@
 		00B7067482423FB58C459CEA /* LayoutCheckedText.swift in Sources */ = {isa = PBXBuildFile; fileRef = 44373DA96AA94049011C34A8 /* LayoutCheckedText.swift */; };
 		089FB0B8D831FC6736866E0A /* ProjectsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1C59CB57FF591A89C1377593 /* ProjectsView.swift */; };
 		259AD5AD43EAFB21CE9E7247 /* TracyApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 10D5BE15721AC2D1F2D61B97 /* TracyApp.swift */; };
+		31151B67970117647F0DDD70 /* SessionViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8CD7B54980FBFA0584E3B7C5 /* SessionViews.swift */; };
 		4D7EF413837943296DDB362E /* AppIcon.icon in Resources */ = {isa = PBXBuildFile; fileRef = 763F0A35622A95792A596D6C /* AppIcon.icon */; };
 		57BAE984DF1870ADFF8336EA /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 6D5E4CBED1AD90C16D148AE0 /* Assets.xcassets */; };
 		598AF216C11195D5A5072224 /* EntryEditor.swift in Sources */ = {isa = PBXBuildFile; fileRef = C983F527A8764079A8A2EAFF /* EntryEditor.swift */; };
@@ -55,6 +56,7 @@
 		6D5E4CBED1AD90C16D148AE0 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		763F0A35622A95792A596D6C /* AppIcon.icon */ = {isa = PBXFileReference; lastKnownFileType = wrapper.icon; path = AppIcon.icon; sourceTree = "<group>"; };
 		8C8A6075C9BAFC929A7CBE99 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
+		8CD7B54980FBFA0584E3B7C5 /* SessionViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionViews.swift; sourceTree = "<group>"; };
 		8CE178044A01404A4969F5BE /* TracyUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TracyUITests.swift; sourceTree = "<group>"; };
 		93589588D442ED5BA4AD47F8 /* SecondaryViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SecondaryViews.swift; sourceTree = "<group>"; };
 		9DB381EE7738E6B22966F13A /* MarketingScreenshots.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MarketingScreenshots.swift; sourceTree = "<group>"; };
@@ -139,6 +141,7 @@
 				1C59CB57FF591A89C1377593 /* ProjectsView.swift */,
 				C33D5B25355F68F0BC190404 /* RootView.swift */,
 				93589588D442ED5BA4AD47F8 /* SecondaryViews.swift */,
+				8CD7B54980FBFA0584E3B7C5 /* SessionViews.swift */,
 				10D5BE15721AC2D1F2D61B97 /* TracyApp.swift */,
 				E2162B98F00E69B3F6397F19 /* VacationEditor.swift */,
 				E74D79E827E26A7216524491 /* WorkdayNotifications.swift */,
@@ -300,6 +303,7 @@
 				089FB0B8D831FC6736866E0A /* ProjectsView.swift in Sources */,
 				C70D4EC4276438E85636DE24 /* RootView.swift in Sources */,
 				EF914E5CDABADD43F6D9D135 /* SecondaryViews.swift in Sources */,
+				31151B67970117647F0DDD70 /* SessionViews.swift in Sources */,
 				259AD5AD43EAFB21CE9E7247 /* TracyApp.swift in Sources */,
 				5BC9441E9E4721F7E4055F35 /* VacationEditor.swift in Sources */,
 				923966D03F2C27BF0E4DE9AA /* WorkdayNotifications.swift in Sources */,
