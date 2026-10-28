@@ -35,6 +35,7 @@ from app.schemas.time_tracking import (
     DefaultProjectPayload,
 )
 from app.services.german_holidays import FEDERAL_STATES
+from app.services.work_sessions import session_totals
 from app.services.statistics import build_statistics, period_bounds
 from app.services.time_calculation import (
     DEFAULT_BREAK_MINUTES,
@@ -128,6 +129,34 @@ def _entry_to_payload(
             "notes": "",
         }
 
+    if entry.sessions is not None:
+        sessions = entry.sessions
+        totals = session_totals(sessions, rounding)
+        first = sessions[0] if sessions else None
+        last = sessions[-1] if sessions else None
+        return {
+            "saved": True,
+            "revision": entry.revision,
+            "client_mutation_id": entry.client_mutation_id,
+            "date": work_date.isoformat(),
+            "is_day_off": is_day_off,
+            "sessions": sessions,
+            "check_in": format_clock_time(first["start"] % 1440) if first else None,
+            "check_out": (
+                format_clock_time(last["end"] % 1440) if last and last["end"] is not None else None
+            ),
+            "check_out_next_day": bool(last and last["end"] is not None and last["end"] >= 1440),
+            "breaks": [],
+            "project_allocations": [],
+            "default_project_id": entry.default_project_id,
+            "status": (
+                "empty" if not sessions else "in_progress" if last["end"] is None else "complete"
+            ),
+            "notes": entry.notes,
+            "exact_hours": minutes_as_hours(totals["exact_minutes"]),
+            "billable_hours": minutes_as_hours(totals["billable_minutes"]),
+            **totals,
+        }
     normalized_breaks = [
         {
             "mode": item.mode,
@@ -181,6 +210,8 @@ async def _entry_for_date(db: AsyncSession, user_id: UUID, work_date: date) -> W
 
 
 def _add_default_break(entry: WorkEntry, *, was_complete: bool) -> None:
+    if entry.sessions is not None:
+        return
     if entry.check_in_minutes is not None and entry.check_out_minutes is not None:
         span = (
             entry.check_out_minutes
@@ -207,6 +238,8 @@ def _add_default_break(entry: WorkEntry, *, was_complete: bool) -> None:
 
 
 def _validate_project_total(entry: WorkEntry, rounding: int) -> None:
+    if entry.sessions is not None:
+        return
     exact, _ = calculate_work_minutes(
         entry.check_in_minutes,
         entry.check_out_minutes,
@@ -341,6 +374,7 @@ async def get_meta(_user: User = Depends(get_current_user)) -> dict:
         "federal_states": FEDERAL_STATES,
         "timezone": settings.timezone,
         "project_bookings": True,
+        "work_sessions": True,
     }
 
 
@@ -508,11 +542,21 @@ async def upsert_entry(
             user_id=user.id, work_date=work_date, default_project_id=preferences.default_project_id
         )
         db.add(entry)
+    if entry.sessions is not None and payload.sessions is None:
+        raise HTTPException(
+            409, "This day uses project sessions. Update your app before editing it."
+        )
+    entry.sessions = (
+        [item.model_dump() for item in payload.sessions] if payload.sessions is not None else None
+    )
     if payload.project_allocations is not None:
         entry.project_allocations = [item.model_dump() for item in payload.project_allocations]
     if "default_project_id" in payload.model_fields_set:
         entry.default_project_id = payload.default_project_id
     ids = {item["project_id"] for item in (entry.project_allocations or [])}
+    ids.update(
+        item["project_id"] for item in (entry.sessions or []) if item["project_id"] is not None
+    )
     if entry.default_project_id is not None:
         ids.add(entry.default_project_id)
     with db.no_autoflush:
@@ -576,6 +620,8 @@ async def check_in(
     user: User = Depends(get_current_user),
 ) -> dict:
     entry = await _entry_for_date(db, user.id, work_date)
+    if entry is not None and entry.sessions is not None:
+        raise HTTPException(409, "Use project session actions in the updated app.")
     now = datetime.now(ZoneInfo(settings.timezone))
     preferences = await _preferences(db, user.id)
     if entry is None:
@@ -605,6 +651,8 @@ async def check_out(
     user: User = Depends(get_current_user),
 ) -> dict:
     entry = await _entry_for_date(db, user.id, work_date)
+    if entry is not None and entry.sessions is not None:
+        raise HTTPException(409, "Use project session actions in the updated app.")
     if entry is None or entry.check_in_minutes is None:
         raise HTTPException(status_code=409, detail="Check in before checking out.")
     was_complete = entry.check_out_minutes is not None

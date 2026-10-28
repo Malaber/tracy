@@ -76,6 +76,7 @@ public final class OfflineJournal {
     public func entry(_ date: String) -> WorkEntry {
         var entry = snapshot.entries[date] ?? .empty(date: date)
         if let pending = snapshot.pending.last(where: { $0.date == date }) {
+            entry.sessions = pending.payload.sessions
             entry.checkIn = pending.payload.checkIn
             entry.checkOut = pending.payload.checkOut
             entry.checkOutNextDay = pending.payload.checkOutNextDay
@@ -88,6 +89,7 @@ public final class OfflineJournal {
                       let end = item.end.flatMap(Clock.minutes) else { return total }
                 return total + end - start + (end < start ? 1440 : 0)
             }
+            if let sessions = entry.sessions { entry.breakMinutes = sessions.reduce(0) { $0 + $1.deduction } }
             entry.notes = pending.payload.notes
             entry.status =
                 entry.checkIn == nil ? "empty" : (entry.checkOut == nil ? "in_progress" : "complete")

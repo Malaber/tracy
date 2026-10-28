@@ -412,3 +412,55 @@ private actor MockServer: EntrySyncService {
     #expect(!day.needsAttention(today: "2026-10-23"))
     #expect(day.label(today: "2026-10-23") == "Entered")
 }
+
+@Test @MainActor func timedSessionsSurviveOfflineAndExcludeGaps() throws {
+    var payload = EntryPayload()
+    for (checkout, minute, project) in [(false,480,1),(true,630,1),(false,645,2),(true,1140,2),(false,1170,1),(true,1200,1)] {
+        payload = try payload.sessionAction(checkOut: checkout, minute: minute, projectId: project)
+    }
+    #expect(payload.exactMinutes == 645)
+    #expect(payload.sessions?.map(\.deduction) == [0,30,0])
+    #expect(payload.checkIn == "08:00" && payload.checkOut == "20:00")
+    let (journal, file) = try journal()
+    defer { try? FileManager.default.removeItem(at: file) }
+    try journal.enqueue(date: "2026-10-28", payload: payload)
+    let restored = try OfflineJournal(file: file).entry("2026-10-28")
+    #expect(restored.sessions == payload.sessions)
+    #expect(restored.billableMinutes == 645)
+    #expect(restored.breakMinutes == 30)
+    let encoded = try TracyAPI.encode(payload)
+    let json = try JSONSerialization.jsonObject(with: encoded) as! [String: Any]
+    #expect((json["sessions"] as? [[String: Any]])?.count == 3)
+    payload.sessions?[1].end = 977
+    #expect(payload.sessions?[1].deduction == 0)
+    payload.sessions?[1].end = 1140
+    payload.sessions?[1].breakMinutes = 0
+    #expect(payload.exactMinutes == 675)
+    let undo = try payload.reopened()
+    #expect(undo.sessions?.last?.end == nil)
+    #expect(undo.sessions?.count == 3)
+    #expect(throws: TracyError.self) { try payload.sessionAction(checkOut: false, minute: 1199, projectId: 1) }
+    let resumed = try payload.sessionAction(checkOut: false, minute: 1230, projectId: 2)
+    #expect(resumed.sessions?.count == 4)
+    #expect(throws: TracyError.self) { try resumed.sessionAction(checkOut: false, minute: 1240, projectId: 1) }
+}
+
+@Test func sessionEstimateRemindersAndManualBreakRemoval() throws {
+    var entry = WorkEntry.empty(date: "2026-10-28")
+    entry.sessions = [.init(projectId: 1, start: 480, end: 630), .init(projectId: 2, start: 645)]
+    entry.checkIn = "08:00"
+    let now = WorkdayDates.date(entry.date, minutes: 1140, timezone: "UTC")!
+    let estimate = SignOffEstimate.project(entry, now: now, timezone: "UTC")
+    #expect(estimate?.exactMinutes == 615)
+    #expect(estimate?.breakMinutes == 30)
+    let corrected = try WorkdayDates.checkout(now, day: entry.date, timezone: "UTC", payload: entry.payload)
+    #expect(corrected.sessions?.last?.end == 1140)
+    #expect(corrected.exactMinutes == 615)
+    let reminders = WorkdayReminder.plan(entry: entry, timezone: "UTC", now: WorkdayDates.date(entry.date, minutes: 645, timezone: "UTC")!)
+    #expect(reminders.first { $0.kind == .eightHours }?.fireDate == WorkdayDates.date(entry.date, minutes: 975, timezone: "UTC"))
+    #expect(reminders.first { $0.kind == .automaticBreak }?.fireDate == WorkdayDates.date(entry.date, minutes: 1006, timezone: "UTC"))
+    let legacy = EntryPayload(checkIn: "08:00", checkOut: "17:00", breaks: [])
+    let resumed = try legacy.sessionAction(checkOut: false, minute: 1050, projectId: 1)
+    #expect(resumed.sessions?.first?.breakMinutes == 0)
+    #expect(resumed.exactMinutes == 540)
+}

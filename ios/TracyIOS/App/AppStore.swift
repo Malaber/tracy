@@ -232,16 +232,23 @@ final class AppStore: ObservableObject {
                                 rounding: snapshot.roundingMinutes ?? 15)
     }
 
-    func quickAction(checkOut: Bool) {
+    @discardableResult
+    func quickAction(checkOut: Bool, minute: Int? = nil, projectId: Int? = nil, useSelectedProject: Bool = false) -> Bool {
         if !isDemo { currentDate = Date() }
         do {
             var payload = entry(today).payload
             let calendar = Clock.calendar(timezone: snapshot.timezone)
             let time = calendar.dateComponents([.hour, .minute], from: currentDate)
             let clock = String(format: "%02d:%02d", time.hour!, time.minute!)
-            if checkOut { payload.checkOut = clock } else { payload.checkIn = clock }
+            let selected = useSelectedProject ? projectId : (checkOut ? (payload.sessions != nil ? payload.sessions?.last?.projectId : payload.defaultProjectId) : snapshot.projectCatalog?.defaultProjectId)
+            if checkOut && payload.sessions == nil && !useSelectedProject {
+                payload.checkOut = clock
+            } else {
+                payload = try payload.sessionAction(checkOut: checkOut, minute: minute ?? Clock.minutes(clock)!, projectId: selected)
+            }
             try save(date: today, payload: payload, baseRevision: entry(today).revision)
-        } catch { self.error = error.localizedDescription }
+            return true
+        } catch { self.error = error.localizedDescription; return false }
     }
 
     func reopenToday(recordGap: Bool) {
@@ -285,6 +292,10 @@ final class AppStore: ObservableObject {
                 try journal.cacheProjects(catalog)
             } else if journal.snapshot.pending.contains(where: { !($0.payload.projectAllocations ?? []).isEmpty || $0.payload.defaultProjectId != nil }) {
                 notice = "Update the Tracy server before syncing project bookings. Your bookings remain saved on this device."
+                return
+            }
+            if meta.workSessions != true && journal.snapshot.pending.contains(where: { $0.payload.sessions != nil }) {
+                notice = "Update the Tracy server before syncing project sessions. Your sessions remain saved on this device."
                 return
             }
             try await JournalSynchronizer.synchronize(journal, using: api)
@@ -339,6 +350,11 @@ final class AppStore: ObservableObject {
             entry.defaultProjectId = journal.snapshot.projectCatalog?.defaultProjectId
             entry.checkIn = "08:30"
             entry.status = "in_progress"
+            if ProcessInfo.processInfo.arguments.contains("--ui-sessions") {
+                entry.checkIn = nil
+                entry.status = "empty"
+                entry.sessions = []
+            }
             entry.saved = true
             entry.revision = "demo"
             let calendar = Clock.calendar(timezone: "Europe/Berlin")

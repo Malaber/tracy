@@ -34,6 +34,7 @@ class WorkEntry(Base):
     check_out_next_day: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     default_project_id: Mapped[int | None] = mapped_column(Integer)
     project_allocations: Mapped[list] = mapped_column(JSON, default=list, nullable=False)
+    sessions: Mapped[list | None] = mapped_column(JSON, nullable=True)
     notes: Mapped[str] = mapped_column(Text, nullable=False, default="")
     revision: Mapped[str] = mapped_column(
         String(36), nullable=False, default=lambda: str(uuid.uuid4())

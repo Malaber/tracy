@@ -23,6 +23,11 @@ public enum WorkdayDates {
             throw TracyError.server("Checkout must be on the working day or the following day.")
         }
         let time = calendar.dateComponents([.hour, .minute], from: date)
+        if payload.sessions != nil {
+            return try payload.sessionAction(checkOut: true,
+                minute: time.hour! * 60 + time.minute! + (selectedDay != day ? 1440 : 0),
+                projectId: payload.sessions?.last?.projectId)
+        }
         var result = payload
         result.checkOut = String(format: "%02d:%02d", time.hour!, time.minute!)
         result.checkOutNextDay = selectedDay != day
@@ -46,6 +51,14 @@ public struct WorkdayReminder: Equatable, Sendable {
             if let date = WorkdayDates.date(entry.date, minutes: minutes, timezone: timezone), date > now {
                 result.append(Self(kind: kind, day: entry.date, fireDate: date))
             }
+        }
+        if let sessions = entry.sessions, let last = sessions.last, last.end == nil {
+            if last.breakMinutes == nil { append(.automaticBreak, minutes: last.start + 361) }
+            let completed = sessions.dropLast().reduce(0) { $0 + $1.exact }
+            let needed = max(0, 480 - completed)
+            let deduction = last.breakMinutes ?? (needed > 360 ? 30 : 0)
+            if needed > 0 { append(.eightHours, minutes: last.start + needed + deduction) }
+            return result
         }
         if entry.breaks.isEmpty { append(.automaticBreak, minutes: start + 361) }
         let deduction = entry.breaks.isEmpty ? 30 : entry.breaks.reduce(0) { total, item in

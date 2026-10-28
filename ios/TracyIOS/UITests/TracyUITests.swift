@@ -188,10 +188,11 @@ final class TracyUITests: XCTestCase {
         XCTAssertTrue(app.staticTexts["heroBillable"].waitForExistence(timeout: 15))
         XCTAssertTrue(app.staticTexts["heroBreaks"].label.contains("breaks deducted"))
         app.buttons["quickAction"].tap()
-        XCTAssertTrue(app.buttons["resumeWork"].waitForExistence(timeout: 10))
-        app.buttons["resumeWork"].tap()
         XCTAssertTrue(app.buttons["quickAction"].waitForExistence(timeout: 10))
-        app.buttons["quickAction"].tap()
+        XCTAssertEqual(app.buttons["quickAction"].label, "Check in now")
+        app.buttons["sessionActionOptions"].tap()
+        XCTAssertTrue(app.buttons["saveSessionAction"].waitForExistence(timeout: 10))
+        app.buttons["Cancel"].tap()
         XCTAssertTrue(app.buttons["undoCheckout"].waitForExistence(timeout: 10))
         app.buttons["undoCheckout"].tap()
         XCTAssertTrue(app.buttons["quickAction"].waitForExistence(timeout: 10))
@@ -329,7 +330,39 @@ final class TracyUITests: XCTestCase {
         XCTAssertTrue(app.buttons["applyActualCheckout"].waitForExistence(timeout: 15))
         app.buttons["applyActualCheckout"].tap()
         app.buttons["saveEntry"].tap()
-        XCTAssertTrue(app.buttons["resumeWork"].waitForExistence(timeout: 10))
+        XCTAssertTrue(app.buttons["undoCheckout"].waitForExistence(timeout: 10))
+    }
+
+    @MainActor
+    func testProjectSessionCheckInOptionsAndEditor() {
+        let app = XCUIApplication()
+        app.launchArguments = testArguments + ["--ui-projects", "--ui-sessions"]
+        app.launchEnvironment["TRACY_UI_JOURNAL"] = UUID().uuidString
+        app.launch()
+        defer { app.terminate() }
+        XCTAssertTrue(app.buttons["sessionActionOptions"].waitForExistence(timeout: 15))
+        app.buttons["sessionActionOptions"].tap()
+        XCTAssertTrue(app.buttons["saveSessionAction"].waitForExistence(timeout: 10))
+        app.buttons["sessionProject"].tap()
+        app.buttons["Project Y"].tap()
+        app.buttons["saveSessionAction"].tap()
+        XCTAssertTrue(app.buttons["editToday"].waitForExistence(timeout: 10))
+        XCTAssertEqual(app.buttons["quickAction"].label, "Check out now")
+        XCTAssertTrue(app.staticTexts["Project Y"].firstMatch.exists)
+        app.buttons["editToday"].tap()
+        XCTAssertTrue(app.staticTexts["Session 1"].waitForExistence(timeout: 10))
+        XCTAssertTrue(app.buttons["saveEntry"].exists)
+        let remove = app.buttons["Remove session"]
+        for _ in 0..<6 {
+            if remove.exists && remove.isHittable { break }
+            app.swipeUp()
+        }
+        XCTAssertTrue(remove.isHittable)
+        remove.tap()
+        XCTAssertTrue(app.staticTexts["Session 1"].waitForNonExistence(timeout: 5))
+        app.buttons["saveEntry"].tap()
+        XCTAssertTrue(app.buttons["quickAction"].waitForExistence(timeout: 10))
+        XCTAssertEqual(app.buttons["quickAction"].label, "Check in now")
     }
 
     @MainActor
