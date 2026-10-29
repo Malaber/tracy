@@ -134,7 +134,11 @@ Static screenshots do not establish that transitions preserve state. The native 
 service can report text partially hidden by floating system bars. Recheck such rows
 fully onscreen; never discard a visible contrast failure. Tracy uses a fresh app launch
 per audited viewport, with deterministic scrolling, and a deliberately low-contrast
-control to ensure real failures remain detectable. Add UI
+control to ensure real failures remain detectable. Account for top-aligned iPad tabs,
+vertical Duo tabs, and navigation bars belonging to separate columns; one column's
+bar must not mark the other column's content as obscured. Audit findings can identify
+buttons as well as text, so preserve the reported element's identity when rechecking.
+Add UI
 assertions for important transitions and run VoiceOver/accessibility audits with
 large text separately from normal-size marketing screenshots.
 

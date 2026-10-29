@@ -205,7 +205,7 @@ struct StatisticsView: View {
                     }
                 }
                 if let savedStatistics = statistics {
-                    let statistics = savedStatistics.projecting(store.signOffEstimate, date: store.today)
+                    let statistics = store.currentStatistics(savedStatistics)
                     if store.signOffEstimate != nil && statistics.days.contains(where: { $0.date == store.today }) {
                         Text("Includes live sign-off estimate").font(.footnote)
                     }
@@ -259,7 +259,7 @@ struct StatisticsView: View {
                 }
                 if store.pendingCount > 0 {
                     Section {
-                        Label("Saved totals exclude pending edits; live estimates include today’s check-in.", systemImage: "icloud.and.arrow.up")
+                        Label("Totals include pending edits. Project totals update after syncing.", systemImage: "icloud.and.arrow.up")
                     }
                 }
                 Section {
@@ -271,6 +271,7 @@ struct StatisticsView: View {
             }
             .modifier(TracyListStyle())
             .navigationTitle("Statistics")
+            .accessibilityIdentifier("statisticsContent")
             .task(id: requestID) { await load() }
             .refreshable { await load() }
         }

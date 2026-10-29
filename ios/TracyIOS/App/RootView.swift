@@ -73,6 +73,7 @@ struct SyncStatus: View {
                         systemImage: store.isSyncing ? "arrow.triangle.2.circlepath" : "icloud.and.arrow.up"
                     )
                     .font(.headline)
+                    .accessibilityIdentifier("syncStatusTitle")
                     if let notice = store.notice {
                         Text(notice).font(.subheadline).foregroundStyle(Color.primary)
                     }
@@ -347,7 +348,7 @@ struct TodayView: View {
 
     @ViewBuilder private var weeklySection: some View {
         if let saved = store.snapshot.week, saved.start <= store.today && store.today <= saved.end {
-            let week = saved.projecting(store.signOffEstimate, date: store.today)
+            let week = store.currentStatistics(saved)
             Section {
                 Button { selectedTab = "statistics" } label: {
                     MetricRow(title: "Billable time", value: Clock.duration(week.summary.billableMinutes), symbol: "chart.bar.fill")

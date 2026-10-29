@@ -26,6 +26,7 @@ final class MarketingScreenshots: XCTestCase {
             ]
             if let state { app.launchArguments.append(state) }
             app.launch()
+            if innerDisplay { XCUIDevice.shared.orientation = .landscapeLeft }
             XCTAssertTrue(app.staticTexts["heroBillable"].waitForExistence(timeout: 15))
         }
         func capture(_ name: String) async throws {
@@ -65,11 +66,13 @@ final class MarketingScreenshots: XCTestCase {
             scrollToday(up: false, summary: true)
         }
         app.buttons["quickAction"].tap()
+        let syncStatus = app.descendants(matching: .any).matching(identifier: "syncStatusTitle").firstMatch
         for _ in 0..<8 {
-            if app.staticTexts["1 day waiting to sync"].isHittable { break }
+            if syncStatus.exists && syncStatus.isHittable { break }
             scrollToday(up: true)
         }
-        XCTAssertTrue(app.staticTexts["1 day waiting to sync"].waitForExistence(timeout: 5))
+        XCTAssertTrue(syncStatus.waitForExistence(timeout: 5))
+        XCTAssertEqual(syncStatus.label, "1 day waiting to sync")
         try await capture("04-offline")
         app.terminate()
         launch("dark")
@@ -79,11 +82,12 @@ final class MarketingScreenshots: XCTestCase {
         try await capture("06-statistics")
         app.buttons["Month"].tap()
         let forecast = app.descendants(matching: .any).matching(identifier: "monthForecastTotal").firstMatch
+        let statisticsContent = app.descendants(matching: .any).matching(identifier: "statisticsContent").firstMatch
         for _ in 0..<6 {
             if forecast.isHittable { break }
-            app.swipeUp()
+            statisticsContent.swipeUp()
         }
-        XCTAssertTrue(forecast.isHittable)
+        XCTAssertTrue(forecast.isHittable, app.debugDescription)
         try await capture("10-month-forecast")
         app.buttons["Settings"].firstMatch.tap()
         XCTAssertTrue(app.buttons["appearancePicker"].waitForExistence(timeout: 5))

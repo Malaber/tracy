@@ -296,7 +296,7 @@ public struct Statistics: Codable, Sendable {
         public var billableMinutes: Int
         public let targetMinutes: Int
         public var balanceMinutes: Int
-        public let completedDays: Int
+        public var completedDays: Int
     }
     public var projectTotals: [ProjectAllocation]?
     public let start: String
@@ -312,6 +312,26 @@ public struct MonthForecast: Equatable, Sendable {
 }
 
 extension Statistics {
+    public func includingPending(_ entries: [WorkEntry]) -> Self {
+        var result = self
+        for entry in entries {
+            guard let index = result.days.firstIndex(where: { $0.date == entry.date }) else { continue }
+            let old = result.days[index]
+            let exact = entry.exactMinutes ?? 0
+            let billable = entry.billableMinutes ?? 0
+            let delta = billable - old.billableMinutes
+            result.days[index].exactMinutes = exact
+            result.days[index].billableMinutes = billable
+            result.days[index].balanceMinutes += delta
+            result.days[index].status = entry.status
+            result.summary.exactMinutes += exact - old.exactMinutes
+            result.summary.billableMinutes += delta
+            result.summary.balanceMinutes += delta
+            result.summary.completedDays += (entry.status == "complete" ? 1 : 0) - (old.status == "complete" ? 1 : 0)
+        }
+        return result
+    }
+
     // Call on projected statistics to retain today's live billable estimate.
     public func monthForecast(today: String) -> MonthForecast {
         var addedMinutes = 0

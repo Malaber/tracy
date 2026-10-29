@@ -221,7 +221,7 @@ final class TracyUITests: XCTestCase {
         var gestures: [(String, Bool)] = []
         func key(_ element: XCUIElement) -> String {
             // Repeated values elsewhere on the page must not validate one another.
-            "\(element.identifier)|\(element.label)|\(Int(element.frame.minX.rounded()))|\(Int(element.frame.width.rounded()))"
+            "\(element.elementType.rawValue)|\(element.identifier)|\(element.label)|\(Int(element.frame.minX.rounded()))|\(Int(element.frame.width.rounded()))"
         }
         func unobscured(_ element: XCUIElement, bars: [CGRect]) -> Bool {
             let frame = element.frame
@@ -236,18 +236,43 @@ final class TracyUITests: XCTestCase {
             }
             let bounds = app.frame
             let topBars = app.navigationBars.allElementsBoundByIndex.filter { $0.exists }.map { element in
-                let frame = element.frame
+                var frame = element.frame
+                // UIKit reports the split detail bar across the entire iPad window.
+                // Constrain it to the content column it actually decorates.
+                let columnID = element.identifier == "Day details" ? "todayDetails"
+                    : element.identifier == "Today" ? "todaySummary" : ""
+                if !columnID.isEmpty {
+                    let column = app.descendants(matching: .any).matching(identifier: columnID).firstMatch
+                    if column.exists {
+                        frame.origin.x = column.frame.minX
+                        frame.size.width = column.frame.width
+                    }
+                    if columnID == "todayDetails" {
+                        let sidebar = app.descendants(matching: .any).matching(identifier: "todaySummary").firstMatch
+                        if sidebar.exists && sidebar.frame.width < bounds.width * 0.8 {
+                            // In portrait iPad the sidebar overlays the full-width
+                            // detail navigation stack, including its reported bar.
+                            let visibleMinX = max(frame.minX, sidebar.frame.maxX)
+                            frame = CGRect(x: visibleMinX, y: frame.minY,
+                                           width: max(0, frame.maxX - visibleMinX), height: frame.height)
+                        }
+                    }
+                }
                 return frame.width > frame.height
-                    ? CGRect(x: bounds.minX, y: bounds.minY, width: bounds.width, height: frame.maxY - bounds.minY)
+                    ? CGRect(x: frame.minX, y: bounds.minY, width: frame.width, height: frame.maxY - bounds.minY)
                     : frame
             }
             let bottomBars = app.tabBars.allElementsBoundByIndex.filter { $0.exists }.map { element in
                 let frame = element.frame
-                return frame.width > frame.height
-                    ? CGRect(x: bounds.minX, y: frame.minY, width: bounds.width, height: bounds.maxY - frame.minY)
-                    : frame
+                guard frame.width > frame.height else { return frame }
+                // iPad places its horizontal tab bar at the top; Duo can use a
+                // vertical bar. Only extend toward the nearest screen edge.
+                return frame.midY < bounds.midY
+                    ? CGRect(x: frame.minX, y: bounds.minY, width: frame.width, height: frame.maxY - bounds.minY)
+                    : CGRect(x: frame.minX, y: frame.minY, width: frame.width, height: bounds.maxY - frame.minY)
             }
             let bars = topBars + bottomBars
+            print("Contrast viewport bounds: \(bounds); navigation: \(topBars); tabs: \(bottomBars)")
             var failing = Set<String>()
             for issue in findings {
                 guard let element = issue.element, element.exists else {
@@ -255,6 +280,7 @@ final class TracyUITests: XCTestCase {
                     return
                 }
                 let identity = key(element)
+                print("Contrast finding: \(identity); frame: \(element.frame)")
                 failing.insert(identity)
                 if unobscured(element, bars: bars) {
                     XCTFail("Visible contrast failure for \(identity): \(issue.detailedDescription)")
@@ -262,14 +288,17 @@ final class TracyUITests: XCTestCase {
                 }
                 pending.insert(identity)
             }
-            for text in app.staticTexts.allElementsBoundByIndex where unobscured(text, bars: bars) {
-                let identity = key(text)
+            // The audit can identify a containing button instead of its text label.
+            // Resolve and verify the same element type; a child label cannot clear it.
+            let candidates = app.staticTexts.allElementsBoundByIndex + app.buttons.allElementsBoundByIndex
+            for element in candidates where unobscured(element, bars: bars) {
+                let identity = key(element)
                 if !failing.contains(identity) { verified.insert(identity) }
             }
             pending.subtract(verified)
             if pending.isEmpty { return }
             let identity = pending.sorted()[0]
-            guard let target = app.staticTexts.allElementsBoundByIndex.first(where: { key($0) == identity }) else {
+            guard let target = candidates.first(where: { key($0) == identity }) else {
                 XCTFail("Cannot reveal deferred contrast finding: \(identity)")
                 return
             }

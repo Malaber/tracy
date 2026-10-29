@@ -232,6 +232,11 @@ final class AppStore: ObservableObject {
                                 rounding: snapshot.roundingMinutes ?? 15)
     }
 
+    func currentStatistics(_ saved: Statistics) -> Statistics {
+        let pending = Set(snapshot.pending.map(\.date)).map { entry($0) }
+        return saved.includingPending(pending).projecting(signOffEstimate, date: today)
+    }
+
     @discardableResult
     func quickAction(checkOut: Bool, minute: Int? = nil, projectId: Int? = nil, useSelectedProject: Bool = false) -> Bool {
         if !isDemo { currentDate = Date() }
