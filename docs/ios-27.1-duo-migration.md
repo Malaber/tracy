@@ -54,15 +54,20 @@ release archives needed for symbols, and simulator data you still use. Removing
 2. Design from available space and size classes, not device names, idiom checks,
    fixed screen dimensions or an assumption that all phones are narrow.
    Tracy uses a split Today layout at regular width and a single scrolling list
-   at compact width or accessibility text sizes.
+   at compact width or accessibility text sizes. Explicitly use a title-and-icon
+   label style for content: a sidebar can otherwise change inherited label presentation.
 3. Keep shared app state and sheet presentation above layout branches. Opening
    the device must not discard an entry, selection or pending offline mutation.
 4. Keep content cards opaque with semantic backgrounds. Reserve Liquid Glass
    for navigation and controls. Let system containers handle safe areas and
    fold-related layout; do not paint a custom tab bar over content.
-5. Use `ViewThatFits` or adaptive stacks for competing headline/status content.
-   A horizontal candidate that silently truncates still “fits”; give essential
-   labels their intrinsic size so the vertical alternative can be selected.
+5. Use adaptive stacks for competing headline/status content. Switch controls
+   to vertical layouts at accessibility text sizes; do not compress button labels.
+   Supply both title and SF Symbol for toolbar buttons. On Duo's vertical bar,
+   text-only Save/Cancel actions can move into overflow or disappear from direct
+   automation queries. Use `cancellationAction` for Cancel and, on iOS 27+,
+   `topBarPinnedTrailing` for Save. Retain `confirmationAction` on older systems.
+   Verify these controls after scrolling a sheet and with the keyboard visible.
 6. Scale typography and avoid fixed-height text rows. Give icon-only controls
    VoiceOver labels. Pair status colors with text and symbols; verify light,
    dark, Increase Contrast, Reduce Transparency and accessibility text sizes.
@@ -73,13 +78,18 @@ release archives needed for symbols, and simulator data you still use. Removing
 Apple references: [Prepare for Duo](https://developer.apple.com/iphone-duo/prepare/),
 [Duo Human Interface Guidelines](https://developer.apple.com/design/human-interface-guidelines/designing-for-iphone-duo),
 [Technology overview](https://developer.apple.com/documentation/technologyoverviews/preparing-your-app-for-iphone-duo),
-[Apple's Duo talk](https://developer.apple.com/videos/play/tech-talks/111461/).
+[Apple's Duo talk](https://developer.apple.com/videos/play/tech-talks/111461/),
+[Raise the bar with Duo](https://developer.apple.com/videos/play/tech-talks/111462/).
 
 ## Automate real screenshots
 
 Use a fresh simulator for each device/display profile, stable fixture data,
 fixed locale, appearance and status-bar time. Build with the same Xcode used for
 release. Capture the actual application, not a resized screenshot or mockup.
+Run Xcode build/test jobs sequentially when they share a local Swift package.
+Keep DerivedData outside the Swift package directory; generated files under the
+package root can trigger repeated resolution. Tracy puts build outputs under
+`e2e-artifacts/`, and native jobs run sequentially.
 
 Tracy's entrypoint:
 
@@ -87,7 +97,7 @@ Tracy's entrypoint:
 .codex/setup.sh --ios
 .venv/bin/inv capture-ios-screenshots
 # Focused iteration, same capture pipeline:
-.venv/bin/python scripts/capture_ios_screenshots.py --version 0.2.7 --device iphone-duo-inner
+.venv/bin/python scripts/capture_ios_screenshots.py --version 0.2.8 --device iphone-duo-inner
 ```
 
 The GitHub screenshot workflow includes both Duo displays plus iPhone and iPad.
@@ -120,7 +130,11 @@ space on the inner display.
 
 Exercise closed → open → partially folded → closed while editing and while a
 session is running. Check selection, draft, focus, sheets and scroll position.
-Static screenshots do not establish that transitions preserve state. Add UI
+Static screenshots do not establish that transitions preserve state. The native contrast
+service can report text partially hidden by floating system bars. Recheck such rows
+fully onscreen; never discard a visible contrast failure. Tracy uses a fresh app launch
+per audited viewport, with deterministic scrolling, and a deliberately low-contrast
+control to ensure real failures remain detectable. Add UI
 assertions for important transitions and run VoiceOver/accessibility audits with
 large text separately from normal-size marketing screenshots.
 

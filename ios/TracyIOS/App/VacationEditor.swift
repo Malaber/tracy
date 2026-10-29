@@ -36,7 +36,7 @@ struct VacationEditor: View {
             .environment(\.timeZone, TimeZone(secondsFromGMT: 0)!)
             .disabled(saving)
             .navigationTitle("Vacation")
-            .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() }.disabled(saving) } }
+            .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Cancel", systemImage: "xmark") { dismiss() }.disabled(saving) } }
             .interactiveDismissDisabled(saving)
             .confirmationDialog("Remove vacation for these dates?", isPresented: $confirmRemoval, titleVisibility: .visible) {
                 Button("Remove vacation", role: .destructive) { Task { await save(marked: false) } }

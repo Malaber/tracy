@@ -113,17 +113,21 @@ App Store metadata URLs (public, no sign-in):
 - Privacy: https://tracy.malaber.de/privacy
 - Marketing: https://tracy.malaber.de/app
 
-GitHub Actions runs native E2E on iPhone and iPad, retains result bundles/screenshots even on success,
+GitHub Actions runs native E2E on iPhone, iPad and Duo, retains result bundles/screenshots even on success,
 and exercises offline editing across process restarts plus light/dark accessibility checks.
 The web E2E registers a real virtual passkey, exchanges a native PKCE token, verifies idempotent
 retries and stale-write conflicts against the running backend, and deletes the account.
 
 Native CI uses `.codex/setup.sh --ios` to install only pinned Invoke, avoiding unrelated backend
-and Node downloads. Xcode 27.0 build 27A266a and iOS 27.0 build 24A434 are explicit; each job creates its own simulator.
+and Node downloads. Xcode 27.1 build 27A9275 is required. Each job creates its own simulator:
+iOS 27.0 build 24A434 for ordinary iPhone/iPad, iOS 27.1 build 24A94232 for Duo.
 Tests use English/US locale, explicit text sizes, a fixed fixture clock, isolated journals,
 and fresh light/dark app launches. Demo mode does not start network monitoring or periodic refresh.
-Accessibility audits run once, without retries or ignored findings. PR and main device matrices
-remain enabled. Hosted runner and Apple service availability are outside test control.
+Each audit category starts from a fresh launch. Contrast findings for text occluded by
+system bars are deferred until that text is scrolled fully onscreen and audited again;
+visible failures and findings that cannot be verified still fail the test. Other categories
+run once without ignored findings. PR and main device matrices remain enabled. Hosted
+runner and Apple service availability are outside test control.
 
 Each Apple accessibility category (contrast, hit regions, descriptions, and traits) has
 its own light and dark test and fresh app launch. Clipping uses measured SwiftUI text
@@ -138,7 +142,7 @@ Screenshots use screen capture before auditing, with no app-hierarchy query in a
 
 CI uses the `xcode-27` runner image and downloads the exact iOS runtime build with
 `xcodebuild -downloadPlatform iOS -buildVersion "$IOS_RUNTIME_BUILD" -architectureVariant arm64`.
-The shared `IOS_RUNTIME_BUILD=24A434` value controls both download and verification.
+The matrix supplies `IOS_RUNTIME_BUILD` and `IOS_RUNTIME_ID` for download and verification.
 CI skips downloading when that exact runtime is already available, avoiding Xcode’s
 nonzero exit for an already downloaded runtime. Do not pass
 `27.0` as the build selector: Apple's catalog may resolve that version to a different build

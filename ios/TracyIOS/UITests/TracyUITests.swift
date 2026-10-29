@@ -32,7 +32,8 @@ final class TracyUITests: XCTestCase {
         let app = XCUIApplication()
         app.launchArguments = testArguments + ["--ui-empty-day"]
         app.launch()
-        XCTAssertTrue(app.staticTexts["No entries yet"].waitForExistence(timeout: 15))
+        XCTAssertTrue(self.reveal(app.staticTexts["No entries yet"], in: app))
+        XCTAssertTrue(self.reveal(app.buttons["quickAction"], in: app))
         XCTAssertEqual(app.buttons["quickAction"].label, "Check in now")
         XCTAssertFalse(app.buttons["undoCheckout"].exists)
         app.terminate()
@@ -41,7 +42,7 @@ final class TracyUITests: XCTestCase {
         defer { app.terminate() }
         XCTAssertTrue(app.descendants(matching: .any)["workingStatus"].waitForExistence(timeout: 15))
         XCTAssertTrue(app.staticTexts["heroBreaks"].label.contains("0h 30m"))
-        XCTAssertTrue(app.staticTexts["Goal exceeded by 1h 0m"].exists)
+        XCTAssertTrue(self.reveal(app.staticTexts["Goal exceeded by 1h 0m"], in: app))
         for _ in 0..<5 {
             if app.buttons["undoCheckout"].isHittable { break }
             app.swipeUp()
@@ -97,6 +98,18 @@ final class TracyUITests: XCTestCase {
     @MainActor
     func testTodayDarkContrast() throws {
         try auditToday(appearance: "dark", category: .contrast, name: "Contrast")
+    }
+
+    @MainActor
+    func testContrastAuditRejectsVisibleLowContrast() throws {
+        let options = XCTExpectedFailure.Options()
+        options.issueMatcher = { issue in
+            issue.compactDescription.contains("Visible contrast failure")
+                && issue.compactDescription.contains("Deliberately low contrast")
+        }
+        try XCTExpectFailure("Visible low-contrast text must still fail the viewport audit", options: options) {
+            try auditToday(appearance: "light", category: .contrast, name: "NegativeControl", negativeControl: true)
+        }
     }
 
     @MainActor
@@ -173,10 +186,11 @@ final class TracyUITests: XCTestCase {
     }
 
     @MainActor
-    private func auditToday(appearance: String, category: XCUIAccessibilityAuditType, name: String) throws {
+    private func auditToday(appearance: String, category: XCUIAccessibilityAuditType, name: String, negativeControl: Bool = false) throws {
         let app = XCUIApplication()
         // Launch directly in the audited appearance, without a live scheme transition.
         app.launchArguments = testArguments + ["-appearance", appearance]
+        if negativeControl { app.launchArguments.append("--ui-contrast-negative-control") }
         app.launch()
         defer { app.terminate() }
         XCTAssertTrue(app.staticTexts["heroBillable"].waitForExistence(timeout: 15))
@@ -187,14 +201,102 @@ final class TracyUITests: XCTestCase {
         screenshot.name = "Today-\(appearance)-\(name)"
         screenshot.lifetime = .keepAlways
         add(screenshot)
-        // One category per fresh launch reduces work under the service's fixed
-        // timeout and identifies the failing category without retries.
-        try app.performAccessibilityAudit(for: category) { issue in
-            // Do not resolve issue.element: that performs another accessibility query
-            // while the audit service is handling a finding.
-            print("Accessibility audit: \(issue.detailedDescription)")
-            return false
+        if category == .contrast {
+            try auditVisibleContrast(app)
+        } else {
+            try app.performAccessibilityAudit(for: category) { issue in
+                print("Accessibility audit: \(issue.detailedDescription)")
+                return false
+            }
         }
+    }
+
+    @MainActor
+    private func auditVisibleContrast(_ app: XCUIApplication) throws {
+        // Apple's contrast audit also samples text underneath floating system bars.
+        // Defer only occluded findings; each must pass again fully onscreen. Visible
+        // failures fail immediately. Never query the hierarchy inside the callback.
+        var verified = Set<String>()
+        var pending = Set<String>()
+        var gestures: [(String, Bool)] = []
+        func key(_ element: XCUIElement) -> String {
+            // Repeated values elsewhere on the page must not validate one another.
+            "\(element.identifier)|\(element.label)|\(Int(element.frame.minX.rounded()))|\(Int(element.frame.width.rounded()))"
+        }
+        func unobscured(_ element: XCUIElement, bars: [CGRect]) -> Bool {
+            let frame = element.frame
+            return !frame.isEmpty && app.frame.contains(frame)
+                && !bars.contains { $0.intersects(frame) }
+        }
+        for viewport in 0..<12 {
+            var findings: [XCUIAccessibilityAuditIssue] = []
+            try app.performAccessibilityAudit(for: .contrast) { issue in
+                findings.append(issue)
+                return true // Process every finding below, outside the audit service callback.
+            }
+            let bounds = app.frame
+            let topBars = app.navigationBars.allElementsBoundByIndex.filter { $0.exists }.map { element in
+                let frame = element.frame
+                return frame.width > frame.height
+                    ? CGRect(x: bounds.minX, y: bounds.minY, width: bounds.width, height: frame.maxY - bounds.minY)
+                    : frame
+            }
+            let bottomBars = app.tabBars.allElementsBoundByIndex.filter { $0.exists }.map { element in
+                let frame = element.frame
+                return frame.width > frame.height
+                    ? CGRect(x: bounds.minX, y: frame.minY, width: bounds.width, height: bounds.maxY - frame.minY)
+                    : frame
+            }
+            let bars = topBars + bottomBars
+            var failing = Set<String>()
+            for issue in findings {
+                guard let element = issue.element, element.exists else {
+                    XCTFail("Unresolved contrast finding: \(issue.detailedDescription)")
+                    return
+                }
+                let identity = key(element)
+                failing.insert(identity)
+                if unobscured(element, bars: bars) {
+                    XCTFail("Visible contrast failure for \(identity): \(issue.detailedDescription)")
+                    return
+                }
+                pending.insert(identity)
+            }
+            for text in app.staticTexts.allElementsBoundByIndex where unobscured(text, bars: bars) {
+                let identity = key(text)
+                if !failing.contains(identity) { verified.insert(identity) }
+            }
+            pending.subtract(verified)
+            if pending.isEmpty { return }
+            let identity = pending.sorted()[0]
+            guard let target = app.staticTexts.allElementsBoundByIndex.first(where: { key($0) == identity }) else {
+                XCTFail("Cannot reveal deferred contrast finding: \(identity)")
+                return
+            }
+            let details = app.descendants(matching: .any).matching(identifier: "todayDetails").firstMatch
+            let summary = app.descendants(matching: .any).matching(identifier: "todaySummary").firstMatch
+            let surfaceID = details.exists && details.frame.intersects(target.frame) ? "todayDetails"
+                : summary.exists ? "todaySummary" : ""
+            gestures.append((surfaceID, target.frame.midY > app.frame.midY))
+            // A second audit in one automation session can time out in Apple's
+            // service. Recreate the same deterministic fixture and replay scrolling.
+            app.terminate()
+            app.launch()
+            XCTAssertTrue(app.staticTexts["heroBillable"].waitForExistence(timeout: 15))
+            for (identifier, upward) in gestures {
+                let surface = identifier.isEmpty ? app
+                    : app.descendants(matching: .any).matching(identifier: identifier).firstMatch
+                let start = surface.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.65))
+                let end = surface.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.35))
+                if upward { start.press(forDuration: 0.05, thenDragTo: end) }
+                else { end.press(forDuration: 0.05, thenDragTo: start) }
+            }
+            let evidence = XCTAttachment(screenshot: XCUIScreen.main.screenshot())
+            evidence.name = "Contrast-revealed-viewport-\(viewport)"
+            evidence.lifetime = .keepAlways
+            add(evidence)
+        }
+        XCTFail("Contrast findings never verified fully onscreen: \(pending.sorted())")
     }
 
     @MainActor
@@ -402,7 +504,7 @@ final class TracyUITests: XCTestCase {
         app.launchEnvironment["TRACY_UI_JOURNAL"] = UUID().uuidString
         app.launch()
         defer { app.terminate() }
-        XCTAssertTrue(app.buttons["sessionActionOptions"].waitForExistence(timeout: 15))
+        XCTAssertTrue(self.reveal(app.buttons["sessionActionOptions"], in: app))
         app.buttons["sessionActionOptions"].tap()
         XCTAssertTrue(app.buttons["saveSessionAction"].waitForExistence(timeout: 10))
         app.buttons["sessionProject"].tap()
@@ -410,7 +512,7 @@ final class TracyUITests: XCTestCase {
         app.buttons["saveSessionAction"].tap()
         XCTAssertTrue(self.reveal(app.buttons["quickAction"], in: app))
         XCTAssertEqual(app.buttons["quickAction"].label, "Check out now")
-        XCTAssertTrue(app.staticTexts["Project Y"].firstMatch.exists)
+        XCTAssertTrue(self.reveal(app.staticTexts["Project Y"].firstMatch, in: app))
         XCTAssertTrue(self.reveal(app.buttons["editToday"], in: app))
         app.buttons["editToday"].tap()
         XCTAssertTrue(app.staticTexts["Session 1"].waitForExistence(timeout: 10))

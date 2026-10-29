@@ -3,9 +3,8 @@
 import json
 import os
 from pathlib import Path
-import re
 import subprocess
-import textwrap
+import sys
 
 import pytest
 
@@ -25,13 +24,12 @@ def test_ci_download_requests_the_build_it_verifies(
     if installed_build == "matching":
         installed_build = build
     runtime_id = f"com.apple.CoreSimulator.SimRuntime.iOS-{runtime}"
-    command = textwrap.dedent(
-        re.search(
-            r"- name: Install matching simulator runtime\n        run: \|\n(.*?)      - name:",
-            workflow,
-            re.DOTALL,
-        ).group(1)
-    )
+    assert "python3 scripts/ensure_ios_runtimes.py '${{ matrix.runtime_version }}'" in workflow
+    command = [
+        sys.executable,
+        str(ROOT / "scripts/ensure_ios_runtimes.py"),
+        runtime.replace("-", "."),
+    ]
     runtimes = (
         []
         if installed_build is None
@@ -49,11 +47,17 @@ def test_ci_download_requests_the_build_it_verifies(
     simctl.write_text('#!/bin/sh\ncat "$RUNTIMES"\n')
     simctl.chmod(0o755)
     recorder = tmp_path / "xcodebuild"
-    recorder.write_text('#!/bin/sh\nprintf "%s\\n" "$@" > "$CAPTURE"\n')
+    ready = tmp_path / "ready.json"
+    ready.write_text(
+        json.dumps(
+            {"runtimes": [{"identifier": runtime_id, "buildversion": build, "isAvailable": True}]}
+        )
+    )
+    recorder.write_text('#!/bin/sh\nprintf "%s\\n" "$@" > "$CAPTURE"\ncp "$READY" "$RUNTIMES"\n')
     recorder.chmod(0o755)
     capture = tmp_path / "arguments"
     subprocess.run(
-        ["sh", "-eu", "-c", command],
+        command,
         env={
             **os.environ,
             "PATH": f"{tmp_path}:{os.environ['PATH']}",
@@ -61,6 +65,7 @@ def test_ci_download_requests_the_build_it_verifies(
             "IOS_RUNTIME_ID": runtime_id,
             "CAPTURE": str(capture),
             "RUNTIMES": str(runtime_file),
+            "READY": str(ready),
         },
         check=True,
     )

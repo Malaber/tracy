@@ -17,6 +17,7 @@ from PIL import Image
 
 ROOT = Path(__file__).resolve().parents[1]
 IOS = ROOT / "ios/TracyIOS"
+DERIVED_DATA = ROOT / "e2e-artifacts/ios-marketing-derived-data"
 RUNTIMES = {
     "27.0": ("com.apple.CoreSimulator.SimRuntime.iOS-27-0", "24A434"),
     "27.1": ("com.apple.CoreSimulator.SimRuntime.iOS-27-1", "24A94232"),
@@ -60,7 +61,7 @@ def xcodebuild(log_path, *arguments):
                 "-scheme",
                 "TracyMarketing",
                 "-derivedDataPath",
-                str(IOS / "DerivedDataMarketing"),
+                str(DERIVED_DATA),
                 "-parallel-testing-enabled",
                 "NO",
                 "CODE_SIGNING_ALLOWED=NO",
@@ -139,8 +140,8 @@ def start_native_capture(identifier, stage):
 
     server = HTTPServer(("127.0.0.1", 0), CaptureHandler)
     bundle = (
-        IOS
-        / "DerivedDataMarketing/Build/Products/Debug-iphonesimulator"
+        DERIVED_DATA
+        / "Build/Products/Debug-iphonesimulator"
         / "TracyMarketingTests-Runner.app/PlugIns/TracyMarketingTests.xctest"
     )
     (bundle / "capture-port.txt").write_text(str(server.server_port))
@@ -207,9 +208,8 @@ def main():
     with tempfile.TemporaryDirectory(dir=output, delete=False) as temporary:
         stage = Path(temporary)
         package = stage / "screenshots"
-        for family, (device, dimensions, version) in DEVICES.items():
-            if args.device and family not in args.device:
-                continue
+        for family in args.device or DEVICES:
+            device, dimensions, version = DEVICES[family]
             print(f"Capturing {family}: {device}", flush=True)
             identifier = run(
                 "xcrun", "simctl", "create", "Tracy marketing", device, RUNTIMES[version][0]
@@ -250,8 +250,8 @@ def main():
                     identifier,
                     "override",
                     "--time",
-                    # simctl rejects ISO timestamps without fractional seconds.
-                    "2026-09-30T09:41:00.000+00:00",
+                    # A literal clock stays stable across host time zones.
+                    "09:41",
                     "--dataNetwork",
                     "wifi",
                     "--wifiMode",

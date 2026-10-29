@@ -5,9 +5,11 @@ struct TracyListStyle: ViewModifier {
     func body(content: Content) -> some View {
         content
             .listStyle(.insetGrouped)
+            .listSectionSpacing(20)
+            .labelStyle(.titleAndIcon)
             .scrollContentBackground(.hidden)
             .background(Color(uiColor: .systemGroupedBackground))
-            .modifier(ReadableScrollEdge())
+
     }
 }
 
@@ -30,11 +32,12 @@ struct MetricRow: View {
     let symbol: String
     var body: some View {
         LabeledContent {
-            Text(value).monospacedDigit().foregroundStyle(.primary)
+            Text(value).monospacedDigit().foregroundStyle(Color.primary)
         } label: {
-            Label { Text(title) } icon: { MetricIcon(symbol: symbol) }
+            Label { Text(title).foregroundStyle(Color.primary) } icon: { MetricIcon(symbol: symbol) }
         }
         .padding(.vertical, 3)
+        .accessibilityElement(children: .combine)
     }
 }
 
@@ -44,12 +47,19 @@ struct ActionRow: View {
     var body: some View {
         HStack(spacing: 12) {
             MetricIcon(symbol: symbol, tint: Color("AccentColor"))
-            Text(title).foregroundStyle(.primary)
+            Text(title).foregroundStyle(Color.primary)
             Spacer(minLength: 8)
             Image(systemName: "chevron.right").font(.caption.weight(.semibold)).foregroundStyle(.tertiary)
         }
         .padding(.vertical, 4)
         .contentShape(Rectangle())
         .accessibilityElement(children: .combine)
+    }
+}
+
+/// Keep the editor's commit action visible in Duo's vertical toolbar.
+extension ToolbarItemPlacement {
+    static var editorConfirmation: ToolbarItemPlacement {
+        if #available(iOS 27.0, *) { .topBarPinnedTrailing } else { .confirmationAction }
     }
 }

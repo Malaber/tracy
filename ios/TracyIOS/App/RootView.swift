@@ -74,7 +74,7 @@ struct SyncStatus: View {
                     )
                     .font(.headline)
                     if let notice = store.notice {
-                        Text(notice).font(.subheadline).foregroundStyle(.primary)
+                        Text(notice).font(.subheadline).foregroundStyle(Color.primary)
                     }
                     if store.needsSignIn {
                         Text("Open Settings to sign in again.").font(.subheadline)
@@ -110,7 +110,7 @@ struct TodayView: View {
             if widthClass == .regular && !typeSize.isAccessibilitySize {
                 // Native split columns adapt their margins around Duo's folding region.
                 NavigationSplitView {
-                    List { dateHeader; heroSection; weeklySection }
+                    List { clippingNegativeControl; dateHeader; heroSection; weeklySection }
                         .accessibilityIdentifier("todaySummary")
                         .modifier(TracyListStyle())
                         .navigationTitle("Today")
@@ -128,12 +128,7 @@ struct TodayView: View {
             } else {
                 NavigationStack {
                     List {
-                        #if DEBUG
-                        if ProcessInfo.processInfo.arguments.contains("--ui-clipping-negative-control") {
-                            LayoutCheckedText("Deliberately clipped text proves measurement detects truncation", key: "negative")
-                                .lineLimit(1).frame(width: 40)
-                        }
-                        #endif
+                        clippingNegativeControl
                         dateHeader
                         heroSection
                         detailsSection
@@ -154,6 +149,19 @@ struct TodayView: View {
         .sheet(item: $editing) { EntryEditor(entry: $0) }
     }
 
+    @ViewBuilder private var clippingNegativeControl: some View {
+        #if DEBUG
+        if ProcessInfo.processInfo.arguments.contains("--ui-contrast-negative-control") {
+            Text("Deliberately low contrast")
+                .foregroundStyle(Color(white: 0.97)).listRowBackground(Color.white)
+        }
+        if ProcessInfo.processInfo.arguments.contains("--ui-clipping-negative-control") {
+            LayoutCheckedText("Deliberately clipped text proves measurement detects truncation", key: "negative")
+                .lineLimit(1).frame(width: 40)
+        }
+        #endif
+    }
+
     private var vacationToolbar: some ToolbarContent {
         ToolbarItem(placement: .primaryAction) {
             Button("Vacation", systemImage: "calendar.badge.plus") { showVacation = true }
@@ -163,7 +171,7 @@ struct TodayView: View {
 
     private var dateHeader: some View {
         LayoutCheckedText(Clock.title(store.today), key: "date")
-            .font(.headline).foregroundStyle(.secondary)
+            .font(.headline).foregroundStyle(Color.primary.opacity(0.72))
             .listRowBackground(Color.clear)
             .listRowSeparator(.hidden)
             .listRowInsets(EdgeInsets(top: 0, leading: 4, bottom: 0, trailing: 4))
@@ -173,14 +181,14 @@ struct TodayView: View {
         Section {
             VStack(alignment: .leading, spacing: 20) {
                 ViewThatFits(in: .horizontal) {
-                    HStack(alignment: .top, spacing: 20) { total; status }
+                    HStack(alignment: .top, spacing: 12) { total; status }
                         .fixedSize(horizontal: true, vertical: false)
                     VStack(alignment: .leading, spacing: 12) { total; status }
                 }
-                ViewThatFits(in: .horizontal) {
-                    HStack(spacing: 20) { breakMetric; Divider(); goalMetric }
-                    VStack(alignment: .leading, spacing: 12) { breakMetric; goalMetric }
-                }
+                let metricLayout = typeSize.isAccessibilitySize
+                    ? AnyLayout(VStackLayout(alignment: .leading, spacing: 12))
+                    : AnyLayout(HStackLayout(alignment: .top, spacing: 20))
+                metricLayout { breakMetric; goalMetric }
                 .fixedSize(horizontal: false, vertical: true)
                 VStack(alignment: .leading, spacing: 6) {
                     ProgressView(value: progress)
@@ -190,7 +198,7 @@ struct TodayView: View {
                         Text(store.signOffEstimate != nil ? "If you check out now" : "Daily progress")
                         Spacer()
                         Text("8h").monospacedDigit()
-                    }.font(.caption).foregroundStyle(.secondary)
+                    }.font(.caption).foregroundStyle(Color.primary.opacity(0.72))
                 }
                 .frame(minHeight: 44)
                 .accessibilityElement(children: .ignore)
@@ -203,7 +211,7 @@ struct TodayView: View {
                 } else if minutes >= 480 {
                     Label(minutes == 480 ? "Daily goal reached" : "Goal exceeded by \(Clock.duration(minutes - 480))", systemImage: "trophy.fill")
                         .font(.subheadline.weight(.semibold))
-                        .foregroundStyle(.primary)
+                        .foregroundStyle(Color.primary)
                         .padding(12).frame(maxWidth: .infinity, alignment: .leading)
                         .background(Color.green.opacity(0.12), in: RoundedRectangle(cornerRadius: 12))
                 }
@@ -218,7 +226,7 @@ struct TodayView: View {
     private var total: some View {
         VStack(alignment: .leading, spacing: 4) {
             LayoutCheckedText("Billable time", key: "billable")
-                .font(.subheadline).foregroundStyle(.secondary).accessibilityIdentifier("heroBillable")
+                .font(.subheadline).foregroundStyle(Color.primary.opacity(0.72)).accessibilityIdentifier("heroBillable")
             LayoutCheckedText(Clock.duration(minutes), key: "headline")
                 .font(.system(size: totalSize, weight: .bold, design: .rounded)).monospacedDigit()
                 .accessibilityAddTraits(.isHeader).accessibilityLabel("Today's billable time, \(Clock.duration(minutes))")
@@ -247,29 +255,50 @@ struct TodayView: View {
     private var breakMetric: some View {
         HStack(spacing: 10) {
             MetricIcon(symbol: "cup.and.saucer")
-            LayoutCheckedText("\(Clock.duration(breaks)) breaks deducted", key: "breaks")
-                .font(.subheadline).accessibilityIdentifier("heroBreaks")
+            VStack(alignment: .leading, spacing: 2) {
+                LayoutCheckedText(Clock.duration(breaks), key: "breaks")
+                    .font(.subheadline.weight(.semibold))
+                    .accessibilityLabel("\(Clock.duration(breaks)) breaks deducted")
+                    .accessibilityIdentifier("heroBreaks")
+                Text("Breaks deducted").font(.caption).foregroundStyle(Color.primary.opacity(0.72))
+            }
         }
     }
     private var goalMetric: some View {
         Label {
             VStack(alignment: .leading) {
                 Text("8h 0m").font(.subheadline.weight(.semibold))
-                Text("Daily goal").font(.caption).foregroundStyle(.secondary)
+                Text("Daily goal").font(.caption).foregroundStyle(Color.primary.opacity(0.72))
             }
         } icon: { MetricIcon(symbol: "target") }
     }
 
+    private var actionTitle: some View {
+        LayoutCheckedText(active ? "Check out now" : started ? "Check in again" : "Check in now", key: "action")
+            .fixedSize(horizontal: false, vertical: true)
+    }
+
     private var quickAction: some View {
-        HStack(spacing: 8) {
+        let layout = typeSize.isAccessibilitySize
+            ? AnyLayout(VStackLayout(spacing: 8)) : AnyLayout(HStackLayout(spacing: 8))
+        return layout {
             Button { store.quickAction(checkOut: active) } label: {
-                Label {
-                    LayoutCheckedText(active ? "Check out now" : started ? "Check in again" : "Check in now", key: "action")
-                } icon: { Image(systemName: active ? "stop.fill" : "play.fill") }
-                    .font(.headline).frame(maxWidth: .infinity).padding(.vertical, 8)
+                Group {
+                    if typeSize.isAccessibilitySize {
+                        actionTitle
+                    } else {
+                        Label { actionTitle } icon: { Image(systemName: active ? "stop.fill" : "play.fill") }
+                    }
+                }
+                .font(.headline).frame(maxWidth: .infinity).padding(.vertical, 8)
             }.accessibilityIdentifier("quickAction")
             Button { showSessionAction = true } label: {
-                Image(systemName: "chevron.down").frame(minWidth: 28, minHeight: 44)
+                HStack {
+                    if typeSize.isAccessibilitySize { Text("Project and time options").fixedSize(horizontal: false, vertical: true) }
+                    Image(systemName: "chevron.down")
+                }
+                .frame(minWidth: 28, minHeight: 44)
+                .frame(maxWidth: typeSize.isAccessibilitySize ? .infinity : nil)
             }
             .accessibilityLabel(active ? "Checkout project and time options" : "Check-in project and time options")
             .accessibilityIdentifier("sessionActionOptions")
@@ -294,7 +323,7 @@ struct TodayView: View {
                 if !entry.notes.isEmpty { Text(entry.notes) }
             }
         } header: {
-            LayoutCheckedText(started ? "Day details" : "Your day", key: "section").foregroundStyle(.primary)
+            LayoutCheckedText(started ? "Day details" : "Your day", key: "section").foregroundStyle(Color.primary)
         }
     }
 
@@ -308,9 +337,9 @@ struct TodayView: View {
             Button { editing = entry } label: {
                 HStack(spacing: 12) {
                     MetricIcon(symbol: "pencil", tint: Color("AccentColor"))
-                    LayoutCheckedText("Edit today’s entry", key: "edit").foregroundStyle(.primary)
+                    LayoutCheckedText("Edit today’s entry", key: "edit").foregroundStyle(Color.primary)
                     Spacer(minLength: 0)
-                    Image(systemName: "chevron.right").font(.caption).foregroundStyle(.secondary)
+                    Image(systemName: "chevron.right").font(.caption).foregroundStyle(Color.primary.opacity(0.72))
                 }.padding(.vertical, 4)
             }.accessibilityIdentifier("editToday")
         }
@@ -319,12 +348,14 @@ struct TodayView: View {
     @ViewBuilder private var weeklySection: some View {
         if let saved = store.snapshot.week, saved.start <= store.today && store.today <= saved.end {
             let week = saved.projecting(store.signOffEstimate, date: store.today)
-            Section("This week") {
+            Section {
                 Button { selectedTab = "statistics" } label: {
                     MetricRow(title: "Billable time", value: Clock.duration(week.summary.billableMinutes), symbol: "chart.bar.fill")
                 }
                 MetricRow(title: "Target", value: Clock.duration(week.summary.targetMinutes), symbol: "target")
                 MetricRow(title: "Balance", value: Clock.duration(week.summary.billableMinutes - week.summary.targetMinutes), symbol: "plusminus")
+            } header: {
+                Text("This week").foregroundStyle(Color.primary)
             }
         }
     }
@@ -341,7 +372,7 @@ struct TodayView: View {
         if !attention.isEmpty {
             Section {
                 Button { selectedTab = "recent" } label: {
-                    LayoutCheckedText("\(attention.count) recent days need a look", key: "review").foregroundStyle(.primary)
+                    LayoutCheckedText("\(attention.count) recent days need a look", key: "review").foregroundStyle(Color.primary)
                 }
             }
         }
@@ -349,21 +380,11 @@ struct TodayView: View {
 
     private func dayValue(_ label: String, value: String, symbol: String) -> some View {
         LabeledContent {
-            LayoutCheckedText(value, key: "value.\(label)").foregroundStyle(.primary).monospacedDigit()
+            LayoutCheckedText(value, key: "value.\(label)").foregroundStyle(Color.primary).monospacedDigit()
         } label: {
             Label { LayoutCheckedText(label, key: "label.\(label)") } icon: { MetricIcon(symbol: symbol) }
         }.padding(.vertical, 3)
-    }
-}
-
-/// Keep readable rows above the tab bar outside its gradual fade.
-struct ReadableScrollEdge: ViewModifier {
-    @ViewBuilder func body(content: Content) -> some View {
-        if #available(iOS 26.0, *) {
-            content.scrollEdgeEffectHidden(true, for: .all)
-        } else {
-            content
-        }
+            .accessibilityElement(children: .combine)
     }
 }
 
@@ -371,7 +392,7 @@ struct PrimaryActionStyle: ViewModifier {
     @Environment(\.colorScheme) private var colorScheme
     @ViewBuilder func body(content: Content) -> some View {
         if #available(iOS 26.0, *) {
-            content.buttonStyle(.glassProminent).buttonBorderShape(.capsule).foregroundStyle(
+            content.buttonStyle(.borderedProminent).buttonBorderShape(.capsule).foregroundStyle(
                 colorScheme == .dark ? Color.black : Color.white)
         } else {
             content.buttonStyle(.borderedProminent)
@@ -431,7 +452,7 @@ struct RecentDaysView: View {
                 Section {
                     Toggle("Needs attention only", isOn: $onlyAttention)
                     Text("Review the past two weeks, or open any date below.")
-                        .font(.subheadline).foregroundStyle(.primary)
+                        .font(.subheadline).foregroundStyle(Color.primary)
                 }
                 Section("Recent days") {
                     let visible = dates.filter { !onlyAttention || needsAttention($0) }
@@ -507,7 +528,7 @@ struct RecentDaysView: View {
             )
             .font(.subheadline).foregroundStyle(needsAttention(date) ? Color.primary : Color.secondary)
             if let exact = entry.billableMinutes, !pending {
-                Text("\(Clock.duration(exact)) billable").font(.title3.weight(.semibold)).monospacedDigit().foregroundStyle(.primary)
+                Text("\(Clock.duration(exact)) billable").font(.title3.weight(.semibold)).monospacedDigit().foregroundStyle(Color.primary)
             }
         }
         .padding(.vertical, 5)
