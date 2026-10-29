@@ -10,7 +10,7 @@ A native SwiftUI iPhone/iPad client focused on recording time and reviewing rece
 
 ## Build and test
 
-From the repository root, run `.codex/setup.sh` first. Install Xcode 26 or newer and XcodeGen, then:
+From the repository root, run `.codex/setup.sh` first. Use Xcode 27.1 (iOS 27.1 SDK) and XcodeGen, then:
 
 ```sh
 .venv/bin/inv check-ios-package
@@ -168,3 +168,13 @@ Vacation is available from Today's toolbar, Settings, and Edit entry. Choose a d
 or range to mark or remove vacation. Saving requires a connection; it preserves
 recorded working time and any entry draft. Existing saved breaks are not rewritten
 by the six-hour threshold change.
+
+## Duo and development baseline
+
+All new native development uses Xcode 27.1. See the reusable
+[Duo migration guide](../../docs/ios-27.1-duo-migration.md) for adaptive layout,
+runtime requirements, screenshots and release checks. The deployment target remains iOS 17.
+
+Month statistics includes a billable month-end forecast: unfinished workdays from
+today onward are topped up to eight hours. Past missing days and completed days
+remain unchanged; weekends, holidays and vacation receive no forecast hours.

@@ -190,6 +190,14 @@
           <article class="metric-card card"><span>Balance</span><strong id="statBalance">—</strong><small>Billable time vs. target</small></article>
         </div>
 
+        <section id="monthForecast" class="card calendar-summary" hidden aria-labelledby="forecastHeading">
+          <p class="eyebrow">Looking ahead</p><h2 id="forecastHeading">Month-end forecast</h2>
+          <dl class="summary-list large">
+            <div><dt>Projected billable time</dt><dd id="forecastTotal">—</dd></div>
+            <div><dt>Projected balance</dt><dd id="forecastBalance">—</dd></div>
+          </dl>
+          <p id="forecastAssumption" class="calendar-note"></p>
+        </section>
         <section class="card"><h2>Project billable totals</h2><p>Saved completed days</p><div id="projectTotals"></div></section>
         <div class="statistics-layout">
           <section class="card chart-card">

@@ -13,11 +13,18 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 @pytest.mark.parametrize(
-    "installed_build,available", [(None, False), ("24A434", True), ("24A434", False), ("old", True)]
+    "installed_build,available",
+    [(None, False), ("matching", True), ("matching", False), ("old", True)],
 )
-def test_ci_download_requests_the_build_it_verifies(tmp_path, installed_build, available):
+@pytest.mark.parametrize("build,runtime", [("24A434", "27-0"), ("24A94232", "27-1")])
+def test_ci_download_requests_the_build_it_verifies(
+    tmp_path, installed_build, available, build, runtime
+):
     workflow = (ROOT / ".github/workflows/ios.yml").read_text()
-    build = re.search(r"^      IOS_RUNTIME_BUILD: (\S+)$", workflow, re.MULTILINE).group(1)
+    assert f"runtime_build: {build}" in workflow
+    if installed_build == "matching":
+        installed_build = build
+    runtime_id = f"com.apple.CoreSimulator.SimRuntime.iOS-{runtime}"
     command = textwrap.dedent(
         re.search(
             r"- name: Install matching simulator runtime\n        run: \|\n(.*?)      - name:",
@@ -30,7 +37,7 @@ def test_ci_download_requests_the_build_it_verifies(tmp_path, installed_build, a
         if installed_build is None
         else [
             {
-                "identifier": "com.apple.CoreSimulator.SimRuntime.iOS-27-0",
+                "identifier": runtime_id,
                 "buildversion": installed_build,
                 "isAvailable": available,
             }
@@ -51,6 +58,7 @@ def test_ci_download_requests_the_build_it_verifies(tmp_path, installed_build, a
             **os.environ,
             "PATH": f"{tmp_path}:{os.environ['PATH']}",
             "IOS_RUNTIME_BUILD": build,
+            "IOS_RUNTIME_ID": runtime_id,
             "CAPTURE": str(capture),
             "RUNTIMES": str(runtime_file),
         },
@@ -61,5 +69,5 @@ def test_ci_download_requests_the_build_it_verifies(tmp_path, installed_build, a
         return
     arguments = capture.read_text().splitlines()
     requested = arguments[arguments.index("-buildVersion") + 1]
-    assert requested == build == "24A434"
-    assert requested != "27.0"  # Version aliases can select a different runtime build.
+    assert requested == build
+    assert requested != "27.1"  # Version aliases can select a different runtime build.

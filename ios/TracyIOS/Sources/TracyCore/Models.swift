@@ -267,7 +267,7 @@ public struct DaySummary: Codable, Identifiable, Sendable {
     public var exactMinutes: Int
     public var billableMinutes: Int
     public var balanceMinutes: Int
-    public let status: String
+    public var status: String
     public let notes: String
     public var id: String { date }
 
@@ -305,7 +305,28 @@ public struct Statistics: Codable, Sendable {
     public var days: [DaySummary]
 }
 
+public struct MonthForecast: Equatable, Sendable {
+    public let billableMinutes: Int
+    public let balanceMinutes: Int
+    public let remainingDays: Int
+}
+
 extension Statistics {
+    // Call on projected statistics to retain today's live billable estimate.
+    public func monthForecast(today: String) -> MonthForecast {
+        var addedMinutes = 0
+        var remainingDays = 0
+        for day in days where day.date >= today && day.isWorkday && day.status != "complete" {
+            let addition = max(0, 480 - day.billableMinutes)
+            addedMinutes += addition
+            if addition > 0 { remainingDays += 1 }
+        }
+        let billable = summary.billableMinutes + addedMinutes
+        return MonthForecast(billableMinutes: billable,
+                             balanceMinutes: billable - summary.targetMinutes,
+                             remainingDays: remainingDays)
+    }
+
     public func projecting(_ estimate: SignOffEstimate?, date: String) -> Self {
         guard let estimate, let index = days.firstIndex(where: { $0.date == date }) else { return self }
         var result = self
@@ -313,6 +334,7 @@ extension Statistics {
         let billableDelta = estimate.billableMinutes - days[index].billableMinutes
         result.days[index].exactMinutes = estimate.exactMinutes
         result.days[index].billableMinutes = estimate.billableMinutes
+        result.days[index].status = "in_progress"
         result.days[index].balanceMinutes += billableDelta
         result.summary.exactMinutes += exactDelta
         result.summary.billableMinutes += billableDelta

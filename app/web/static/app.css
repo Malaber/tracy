@@ -304,6 +304,8 @@ input:hover, select:hover, textarea:hover { border-color: #aeb7c5; }
 .chart-bar { width: min(18px, 38%); min-height: 2px; border-radius: 5px 5px 0 0; background: var(--blue); }
 .chart-bar.target { background: #d6dce6; }
 .chart-column small { display: block; margin: 8px 0 -20px; color: var(--muted); font-size: 9px; }
+#monthForecast { min-height: 0; margin-bottom: 20px; }
+#monthForecast #forecastTotal { font-size: 24px; letter-spacing: -.025em; }
 .calendar-summary .summary-list { margin-top: 20px; }
 .calendar-summary .summary-list div { padding: 12px 0; border-bottom: 1px solid var(--line); }
 .calendar-summary .summary-list dt { color: var(--muted); }

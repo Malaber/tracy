@@ -327,6 +327,39 @@ final class AppStore: ObservableObject {
     }
 
     #if DEBUG
+        func demoStatistics(period: String) -> Statistics? {
+            guard isDemo, let recent = snapshot.recent else { return nil }
+            var calendar = Clock.calendar(timezone: snapshot.timezone)
+            calendar.firstWeekday = 2
+            let component: Calendar.Component = period == "month" ? .month : period == "year" ? .year : .weekOfYear
+            guard let interval = calendar.dateInterval(of: component, for: currentDate) else { return nil }
+            var date = interval.start
+            var days: [[String: Any]] = []
+            while date < interval.end {
+                let key = Clock.day(date, timezone: snapshot.timezone)
+                if let saved = recent.days.first(where: { $0.date == key }),
+                   let data = try? JSONEncoder().encode(saved),
+                   let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
+                    days.append(object)
+                } else {
+                    let weekend = calendar.isDateInWeekend(date)
+                    days.append(["date": key, "weekday": "", "isWeekend": weekend, "isDayOff": false,
+                                 "isWorkday": !weekend, "expectedMinutes": weekend ? 0 : 480,
+                                 "exactMinutes": 0, "billableMinutes": 0, "balanceMinutes": weekend ? 0 : -480,
+                                 "status": "empty", "notes": ""])
+                }
+                date = calendar.date(byAdding: .day, value: 1, to: date)!
+            }
+            let exact = days.reduce(0) { $0 + ($1["exactMinutes"] as? Int ?? 0) }
+            let billable = days.reduce(0) { $0 + ($1["billableMinutes"] as? Int ?? 0) }
+            let target = days.reduce(0) { $0 + ($1["expectedMinutes"] as? Int ?? 0) }
+            let object: [String: Any] = ["start": days.first!["date"]!, "end": days.last!["date"]!, "days": days,
+                "summary": ["exactMinutes": exact, "billableMinutes": billable, "targetMinutes": target,
+                            "balanceMinutes": billable - target, "completedDays": days.filter { $0["status"] as? String == "complete" }.count]]
+            guard let data = try? JSONSerialization.data(withJSONObject: object) else { return nil }
+            return try? TracyAPI.decoder.decode(Statistics.self, from: data)
+        }
+
         private func openDemo() throws {
             isDemo = true
             currentDate = Date(timeIntervalSince1970: 1_790_784_000)  // 2026-09-30 16:00 UTC
@@ -350,10 +383,19 @@ final class AppStore: ObservableObject {
             entry.defaultProjectId = journal.snapshot.projectCatalog?.defaultProjectId
             entry.checkIn = "08:30"
             entry.status = "in_progress"
-            if ProcessInfo.processInfo.arguments.contains("--ui-sessions") {
+            if ProcessInfo.processInfo.arguments.contains("--ui-sessions") || ProcessInfo.processInfo.arguments.contains("--ui-empty-day") {
                 entry.checkIn = nil
                 entry.status = "empty"
                 entry.sessions = []
+            }
+            if ProcessInfo.processInfo.arguments.contains("--ui-completed-day") {
+                entry.checkIn = "07:53"
+                entry.checkOut = "17:21"
+                entry.breaks = [WorkBreak()]
+                entry.breakMinutes = 30
+                entry.exactMinutes = 538
+                entry.billableMinutes = 540
+                entry.status = "complete"
             }
             entry.saved = true
             entry.revision = "demo"
@@ -367,7 +409,7 @@ final class AppStore: ObservableObject {
                 let dayOff = offset == 5
                 let missing = offset == 1
                 let complete = offset > 0 && !weekend && !dayOff && !missing
-                let minutes = complete ? (offset == 2 ? 420 : 480) : 0
+                let minutes = offset == 0 ? (entry.billableMinutes ?? 0) : complete ? (offset == 2 ? 420 : 480) : 0
                 if complete {
                     var historical = WorkEntry.empty(date: key)
                     historical.checkIn = "08:30"
@@ -386,19 +428,21 @@ final class AppStore: ObservableObject {
                     "is_workday": !weekend && !dayOff, "expected_minutes": weekend || dayOff ? 0 : 480,
                     "exact_minutes": minutes, "billable_minutes": minutes,
                     "balance_minutes": minutes - (weekend || dayOff ? 0 : 480),
-                    "status": offset == 0 ? "in_progress" : complete ? "complete" : "empty", "notes": "",
+                    "status": offset == 0 ? entry.status : complete ? "complete" : "empty", "notes": "",
                 ])
             }
             let fixture: [String: Any] = [
                 "start": days.first!["date"]!, "end": today, "days": days,
                 "summary": [
-                    "exact_minutes": 3780, "billable_minutes": 3780, "target_minutes": 4320,
-                    "balance_minutes": -540, "completed_days": 8,
+                    "exact_minutes": 3780 + (entry.exactMinutes ?? 0), "billable_minutes": 3780 + (entry.billableMinutes ?? 0), "target_minutes": 4320,
+                    "balance_minutes": -540 + (entry.billableMinutes ?? 0), "completed_days": entry.status == "complete" ? 9 : 8,
                 ],
             ]
             let recent = try TracyAPI.decoder.decode(
                 Statistics.self, from: JSONSerialization.data(withJSONObject: fixture))
             try journal.cache(entries: entries, recent: recent)
+            snapshot = journal.snapshot
+            if let week = demoStatistics(period: "week") { try journal.cacheWeek(week) }
             snapshot = journal.snapshot
         }
     #endif

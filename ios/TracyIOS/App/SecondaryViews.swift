@@ -68,7 +68,7 @@ struct SettingsView: View {
     var body: some View {
         NavigationStack {
             Form {
-                Section { NavigationLink("Projects") { ProjectsView() } }
+                Section { NavigationLink { ProjectsView() } label: { Label("Projects", systemImage: "folder") } }
 
                 Section("Appearance") {
                     Picker("Color scheme", selection: $appearance) {
@@ -101,7 +101,7 @@ struct SettingsView: View {
                     if let error = notifications.error { Text(error).foregroundStyle(.red) }
                 }
                 Section("Vacation") {
-                    NavigationLink("Manage vacation") { VacationEditor(initialDay: store.today) }
+                    NavigationLink { VacationEditor(initialDay: store.today) } label: { Label("Manage vacation", systemImage: "sun.max") }
                 }
                 Section("Sync") {
                     LabeledContent("Waiting to sync", value: "\(store.pendingCount) days")
@@ -153,6 +153,7 @@ struct SettingsView: View {
                         value: Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0")
                 }
             }
+            .modifier(TracyListStyle())
             .navigationTitle("Settings")
             .confirmationDialog(
                 "Permanently delete your account and all work records?", isPresented: $confirmDeletion,
@@ -209,12 +210,31 @@ struct StatisticsView: View {
                         Text("Includes live sign-off estimate").font(.footnote)
                     }
                     Section("\(Clock.title(statistics.start)) – \(Clock.title(statistics.end))") {
-                        LabeledContent("Billable time", value: Clock.duration(statistics.summary.billableMinutes))
-                        LabeledContent("Exact time", value: Clock.duration(statistics.summary.exactMinutes))
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text("Billable time").font(.subheadline).foregroundStyle(.secondary)
+                            Text(Clock.duration(statistics.summary.billableMinutes)).font(.largeTitle.bold()).monospacedDigit()
+                                .accessibilityIdentifier("statisticsBillable")
+                        }.padding(.vertical, 12)
+                        MetricRow(title: "Exact time", value: Clock.duration(statistics.summary.exactMinutes), symbol: "clock")
                         LabeledContent(
                             "Full-period target", value: Clock.duration(statistics.summary.targetMinutes))
                         LabeledContent("Balance", value: Clock.duration(statistics.summary.billableMinutes - statistics.summary.targetMinutes))
-                        LabeledContent("Completed days", value: "\(statistics.summary.completedDays)")
+                        MetricRow(title: "Completed days", value: "\(statistics.summary.completedDays)", symbol: "calendar.badge.checkmark")
+                    }
+                    if period == "month" {
+                        let forecast = statistics.monthForecast(today: store.today)
+                        Section {
+                            MetricRow(title: "Projected billable time", value: Clock.duration(forecast.billableMinutes), symbol: "calendar.badge.clock")
+                                .accessibilityIdentifier("monthForecastTotal")
+                            LabeledContent("Projected balance") {
+                                Text(forecast.balanceMinutes == 0 ? "On target" : "\(Clock.duration(abs(forecast.balanceMinutes))) \(forecast.balanceMinutes > 0 ? "over" : "under") target")
+                                    .foregroundStyle(forecast.balanceMinutes >= 0 ? Color.primary : Color.orange)
+                            }
+                        } header: {
+                            Text("Month-end forecast")
+                        } footer: {
+                            Text("Assumes 8h on \(forecast.remainingDays) remaining unfinished workdays, topping up today. Weekends, holidays and vacation excluded. Completed days stay unchanged.")
+                        }
                     }
                     Section("Project billable totals · saved days") {
                         ForEach(statistics.projectTotals ?? [], id: \.projectId) { total in
@@ -249,6 +269,7 @@ struct StatisticsView: View {
                     .font(.footnote).foregroundStyle(.secondary)
                 }
             }
+            .modifier(TracyListStyle())
             .navigationTitle("Statistics")
             .task(id: requestID) { await load() }
             .refreshable { await load() }
@@ -258,7 +279,14 @@ struct StatisticsView: View {
     private func load() async {
         statistics = nil
         error = nil
-        guard let api = store.api, !store.isDemo else {
+        #if DEBUG
+        if store.isDemo {
+            anchor = Clock.date(store.today)
+            statistics = store.demoStatistics(period: period)
+            return
+        }
+        #endif
+        guard let api = store.api else {
             error = "Statistics will appear after connecting to your server."
             return
         }

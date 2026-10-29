@@ -1,3 +1,12 @@
+# Native redesign validation pending
+
+- [x] Install and select Xcode 27.1; finish first-launch setup.
+- [ ] Run the updated native UI/accessibility suite on iOS 27.1 (24A94232); fix forward before release.
+- [ ] Validate real iPhone Duo outer-display screenshot capture (1398 × 2034); the capture task rejects other dimensions rather than resizing.
+- [ ] Add and verify automated Duo inner-display/pose switching; review open, closed, and partially folded layouts with state preservation.
+- [ ] Capture and visually review all nine scenes on iPhone, iPad, and Duo, including large Dynamic Type and both appearances.
+- [x] Document Xcode 27.1 baseline and Duo migration. Retain iOS 27.0 runtime for ordinary iPhone/iPad tests; 27.1 runtime supports Duo only.
+
 # Completed features
 
 - [x] Add iOS workday notifications:
