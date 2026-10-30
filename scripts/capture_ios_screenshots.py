@@ -64,6 +64,8 @@ def xcodebuild(log_path, *arguments):
                 str(DERIVED_DATA),
                 "-parallel-testing-enabled",
                 "NO",
+                "-collect-test-diagnostics",
+                "never",
                 "CODE_SIGNING_ALLOWED=NO",
                 *arguments,
             ],

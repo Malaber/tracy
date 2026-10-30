@@ -61,18 +61,21 @@ struct RootView: View {
 
 struct SyncStatus: View {
     @EnvironmentObject private var store: AppStore
+    private var title: String {
+        store.isSyncing ? "Syncing…" : store.pendingCount > 0
+            ? "\(store.pendingCount) \(store.pendingCount == 1 ? "day" : "days") waiting to sync" : "Saved data"
+    }
     var body: some View {
         if store.pendingCount > 0 || store.notice != nil || store.isSyncing {
             Section {
                 VStack(alignment: .leading, spacing: 8) {
                     Label(
-                        store.isSyncing
-                            ? "Syncing…"
-                            : store.pendingCount > 0
-                                ? "\(store.pendingCount) \(store.pendingCount == 1 ? "day" : "days") waiting to sync" : "Saved data",
+                        title,
                         systemImage: store.isSyncing ? "arrow.triangle.2.circlepath" : "icloud.and.arrow.up"
                     )
                     .font(.headline)
+                    .accessibilityElement(children: .ignore)
+                    .accessibilityLabel(title)
                     .accessibilityIdentifier("syncStatusTitle")
                     if let notice = store.notice {
                         Text(notice).font(.subheadline).foregroundStyle(Color.primary)
