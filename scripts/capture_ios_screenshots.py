@@ -130,21 +130,26 @@ def start_native_capture(identifier, stage):
                 except Exception as error:
                     self.send_error(500, str(error))
                 return
-            if scene not in SCENES:
+            pose_image = scene in {"pose-image/0", "pose-image/90", "pose-image/180"}
+            if scene not in SCENES and not pose_image:
                 self.send_error(404)
                 return
             try:
-                path = stage / f"native-{scene}.png"
+                path = stage / f"native-{scene.replace('/', '-')}.png"
+                display = "primary" if scene == "pose-image/0" else "primary-1"
                 run(
                     "xcrun",
                     "simctl",
                     "io",
                     identifier,
                     "screenshot",
-                    "--display=primary-1",
+                    f"--display={display}",
                     str(path),
                 )
                 data = path.read_bytes()
+                with Image.open(path) as capture:
+                    if max(high for low, high in capture.convert("RGB").getextrema()) <= 8:
+                        raise ValueError(f"Inactive display captured for {scene}")
                 self.send_response(200)
                 self.send_header("Content-Type", "image/png")
                 self.send_header("Content-Length", str(len(data)))

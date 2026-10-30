@@ -130,7 +130,10 @@ final class MarketingScreenshots: XCTestCase {
                 await fulfillment(of: [displayChanged], timeout: 15)
                 XCTAssertTrue(app.buttons["saveEntry"].waitForExistence(timeout: 10))
                 XCTAssertTrue((notes.value as? String)?.contains("Duo transition draft") == true)
-                let evidence = XCTAttachment(screenshot: XCUIScreen.main.screenshot())
+                let imageURL = try XCTUnwrap(URL(string: "http://127.0.0.1:\(port)/pose-image/\(angle)"))
+                let (imageData, imageResponse) = try await URLSession.shared.data(from: imageURL)
+                XCTAssertEqual((imageResponse as? HTTPURLResponse)?.statusCode, 200)
+                let evidence = XCTAttachment(data: imageData, uniformTypeIdentifier: "public.png")
                 evidence.name = "Duo-editor-pose-\(index)-\(angle)"
                 evidence.lifetime = .keepAlways
                 add(evidence)
