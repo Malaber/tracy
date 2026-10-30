@@ -67,7 +67,7 @@ final class TracyUITests: XCTestCase {
         XCTAssertTrue(app.buttons["Statistics"].firstMatch.waitForExistence(timeout: 15))
         app.buttons["Statistics"].firstMatch.tap()
         app.buttons["Month"].tap()
-        let forecast = app.descendants(matching: .any).matching(identifier: "monthForecastTotal").firstMatch
+        let forecast = app.staticTexts["monthForecastTotal"]
         XCTAssertTrue(self.reveal(forecast, in: app))
         XCTAssertTrue(app.staticTexts["Projected balance"].exists)
     }
@@ -448,9 +448,24 @@ final class TracyUITests: XCTestCase {
         reveal(add)
         add.tap()
         reveal(app.buttons["removeBreak2"])
-        app.buttons["removeBreak2"].swipeLeft()
-        app.buttons["Delete"].tap()
-        XCTAssertTrue(app.buttons["removeBreak2"].waitForNonExistence(timeout: 5))
+        let secondBreak = app.buttons["removeBreak2"]
+        let secondRow = form.cells.containing(.button, identifier: "removeBreak2").firstMatch
+        // The nested Remove button is narrow. Swiping it can trigger auto-scroll
+        // and hit the picker instead. Drag across the row's empty trailing area,
+        // level with Remove, without crossing the picker or stepper.
+        let y = (secondBreak.frame.midY - secondRow.frame.minY) / secondRow.frame.height
+        let start = secondRow.coordinate(withNormalizedOffset: CGVector(dx: 0.9, dy: y))
+        let end = secondRow.coordinate(withNormalizedOffset: CGVector(dx: 0.35, dy: y))
+        XCTAssertTrue(form.frame.contains(start.screenPoint))
+        XCTAssertTrue(form.frame.contains(end.screenPoint))
+        start.press(forDuration: 0.05, thenDragTo: end)
+        // A native full swipe may commit immediately; otherwise confirm Delete.
+        if !secondBreak.waitForNonExistence(timeout: 3) {
+            let delete = app.buttons["Delete"]
+            XCTAssertTrue(delete.waitForExistence(timeout: 5))
+            delete.tap()
+        }
+        XCTAssertTrue(secondBreak.waitForNonExistence(timeout: 5))
         let duration = app.steppers["breakDuration1"]
         reveal(duration)
         XCTAssertEqual(duration.value as? String, "30 minutes")

@@ -360,9 +360,10 @@ def set_admin(c, email, revoke=False):
 
 
 @task(generate_ios_project)
-def capture_ios_screenshots(c):
-    """Capture and package App Store screenshots on isolated iPhone and iPad simulators."""
+def capture_ios_screenshots(c, device=""):
+    """Capture all profiles, or one device profile for an isolated CI matrix job."""
+    selection = f" --device {shlex.quote(device)}" if device else ""
     c.run(
         f"{_bin('python')} scripts/capture_ios_screenshots.py "
-        f"--version {shlex.quote(_current_ios_version())}"
+        f"--version {shlex.quote(_current_ios_version())}{selection}"
     )

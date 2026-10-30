@@ -23,7 +23,11 @@ permissions:
 jobs:
   screenshots:
     runs-on: xcode-27
-    timeout-minutes: 45
+    timeout-minutes: 35
+    strategy:
+      fail-fast: false
+      matrix:
+        device: [iphone-6.3, ipad-13, iphone-duo-outer, iphone-duo-inner]
     env:
       DEVELOPER_DIR: /Applications/Xcode_27.1.app/Contents/Developer
     steps:
@@ -38,16 +42,35 @@ jobs:
       - run: brew install xcodegen
       - run: .codex/setup.sh --ios
       - run: .venv/bin/pip install --retries 0 Pillow==12.1.1
-      - run: .venv/bin/inv capture-ios-screenshots
+      - name: Capture one device
+        timeout-minutes: 25
+        run: .venv/bin/inv capture-ios-screenshots --device=${{ matrix.device }}
       - uses: actions/upload-artifact@v7
         with:
-          name: tracy-app-store-screenshots
+          name: tracy-app-store-device-${{ matrix.device }}
           path: e2e-artifacts/app-store/*.zip
           if-no-files-found: error
-      - if: failure()
+      - if: always()
         uses: actions/upload-artifact@v7
         with:
-          name: screenshot-build-logs
+          name: screenshot-build-logs-${{ matrix.device }}
           path: |
             e2e-artifacts/app-store/*.log
             e2e-artifacts/app-store/tmp*/*.xcresult
+
+  package:
+    needs: screenshots
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          pattern: tracy-app-store-device-*
+          merge-multiple: true
+          path: screenshots
+      - name: Require all four device archives
+        run: test "$(find screenshots -maxdepth 1 -name '*.zip' | wc -l)" -eq 4
+      - uses: actions/upload-artifact@v7
+        with:
+          name: tracy-app-store-screenshots
+          path: screenshots/*.zip
+          if-no-files-found: error

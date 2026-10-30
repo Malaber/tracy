@@ -170,3 +170,19 @@ Run local tests and fix failures before archiving. Upload the exact reviewed
 source revision to TestFlight. Keep CI screenshot artifacts for review; do not
 claim a GitHub run or Apple processing completed merely because a push/upload
 was accepted.
+
+## Keep screenshot CI bounded per device
+
+Capture each device profile in its own matrix job with
+`inv capture-ios-screenshots --device=iphone-duo-inner` (or the other profile names).
+A combined four-device run exceeded the hosted runner's 45-minute job limit even
+though its first three profiles completed. Each device now has a 25-minute capture
+step inside a 35-minute job, leaving time to upload diagnostics after a step timeout.
+The final artifact requires all four successful device archives; filenames include
+the profile so parallel downloads cannot overwrite each other. The release workflow
+continues to consume `tracy-app-store-screenshots`, containing four ZIPs.
+
+For forecast rows, use their typed static-text identifier instead of a whole-tree
+query for an offscreen element. For native swipe actions, gesture across the row's
+empty trailing area, away from nested pickers and steppers. A full swipe can delete
+immediately; a partial swipe requires Delete. Assert the row is gone in either case.

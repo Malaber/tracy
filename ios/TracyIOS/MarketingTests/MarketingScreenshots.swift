@@ -88,8 +88,8 @@ final class MarketingScreenshots: XCTestCase {
         XCTAssertTrue(app.staticTexts["statisticsBillable"].waitForExistence(timeout: 5))
         try await capture("06-statistics")
         app.buttons["Month"].tap()
-        let forecast = app.descendants(matching: .any).matching(identifier: "monthForecastTotal").firstMatch
-        let statisticsContent = app.descendants(matching: .any).matching(identifier: "statisticsContent").firstMatch
+        let forecast = app.staticTexts["monthForecastTotal"]
+        let statisticsContent = app.collectionViews["statisticsContent"]
         for _ in 0..<6 {
             if forecast.isHittable { break }
             statisticsContent.swipeUp()

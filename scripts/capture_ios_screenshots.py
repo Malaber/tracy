@@ -328,7 +328,8 @@ def main():
                     capture_server.server_close()
                 run("xcrun", "simctl", "delete", identifier)
         (package / "manifest.json").write_text(json.dumps(manifest, indent=2) + "\n")
-        archive = output / f"tracy-app-store-{args.version}.zip"
+        suffix = "-" + "-".join(args.device) if args.device else ""
+        archive = output / f"tracy-app-store-{args.version}{suffix}.zip"
         with zipfile.ZipFile(archive, "w", zipfile.ZIP_DEFLATED) as bundle:
             for path in sorted(package.rglob("*")):
                 if path.is_file():
