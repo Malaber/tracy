@@ -158,9 +158,12 @@ For persistence tests, wait for editor dismissal before backgrounding and termin
 the app. Activate SpringBoard explicitly and wait for it to become foreground;
 the Home-button event alone does not reliably change Duo foreground state.
 After relaunch, wait for visible app content before querying
-navigation. Prefer typed list queries and exact `identifier` predicates over whole-tree
-`.any` lookups: a CI spindump showed broad identifier/label matching occupying the
-accessibility service during a post-launch query. Keep disk-persistence assertions;
+navigation. Prefer typed queries over whole-tree `.any` lookups. For adaptive containers,
+enumerate existing lists instead of asking whether a named split column's
+`firstMatch` exists: that column is absent on compact Duo, and even a typed exact
+identifier query stalled the CI accessibility service. Return immediately when the
+target is already visible. Keep independent fixture scenarios in separate tests so
+one scenario's navigation state cannot leak into the next. Keep disk-persistence assertions;
 do not turn lifecycle failures into silently retried passes.
 
 Run local tests and fix failures before archiving. Upload the exact reviewed

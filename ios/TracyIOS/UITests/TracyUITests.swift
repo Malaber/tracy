@@ -10,13 +10,12 @@ final class TracyUITests: XCTestCase {
 
     @MainActor
     private func reveal(_ element: XCUIElement, in app: XCUIApplication) -> Bool {
-        _ = element.waitForExistence(timeout: 3)
-        // Lists are collection views. A broad `.any` identifier lookup also resolves
-        // labels throughout the SwiftUI tree, even when the compact layout has no
-        // split columns. CI spindumps showed that query monopolizing the AX service.
-        let summary = app.collectionViews.matching(NSPredicate(format: "identifier == %@", "todaySummary")).firstMatch
-        let details = app.collectionViews.matching(NSPredicate(format: "identifier == %@", "todayDetails")).firstMatch
-        let surfaces = summary.exists ? [summary, details] : [app]
+        if element.waitForExistence(timeout: 3) && element.isHittable { return true }
+        // Enumerate existing lists once instead of resolving firstMatch for a
+        // split-column identifier absent on compact Duo. Missing firstMatch
+        // queries have stalled XCTest's AX service for minutes on CI.
+        let lists = app.collectionViews.allElementsBoundByIndex
+        let surfaces = lists.isEmpty ? [app] : lists
         for surface in surfaces {
             for _ in 0..<8 {
                 if element.exists && element.isHittable { return true }
@@ -31,19 +30,24 @@ final class TracyUITests: XCTestCase {
     }
 
     @MainActor
-    func testEmptyAndCompletedDayHierarchy() {
+    func testEmptyDayHierarchy() {
         let app = XCUIApplication()
         app.launchArguments = testArguments + ["--ui-empty-day"]
         app.launch()
+        defer { app.terminate() }
         XCTAssertTrue(self.reveal(app.staticTexts["No entries yet"], in: app))
         XCTAssertTrue(self.reveal(app.buttons["quickAction"], in: app))
         XCTAssertEqual(app.buttons["quickAction"].label, "Check in now")
         XCTAssertFalse(app.buttons["undoCheckout"].exists)
-        app.terminate()
+    }
+
+    @MainActor
+    func testCompletedDayHierarchy() {
+        let app = XCUIApplication()
         app.launchArguments = testArguments + ["--ui-completed-day"]
         app.launch()
         defer { app.terminate() }
-        XCTAssertTrue(app.descendants(matching: .any)["workingStatus"].waitForExistence(timeout: 15))
+        XCTAssertTrue(app.staticTexts["workingStatus"].waitForExistence(timeout: 15))
         XCTAssertTrue(app.staticTexts["heroBreaks"].label.contains("0h 30m"))
         XCTAssertTrue(self.reveal(app.staticTexts["Goal exceeded by 1h 0m"], in: app))
         for _ in 0..<5 {
