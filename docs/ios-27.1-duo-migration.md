@@ -119,6 +119,11 @@ For inner captures, a temporary localhost server runs `simctl io screenshot
 for that PNG and attaches its original bytes. The ephemeral port is injected
 into the test bundle only; neither server nor capture code ships in the app.
 The screenshot packager still requires full native dimensions.
+After a hinge transition, `XCUIScreen.main.screenshot()` can still capture the
+inactive panel and return a black image even while accessibility queries succeed.
+Choose `primary` for the closed outer display and `primary-1` for the open or
+partially folded inner display. Capture through the same native bridge and reject
+black frames for transition evidence as well as marketing images.
 
 ## Review before release
 
