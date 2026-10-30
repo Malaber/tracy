@@ -154,6 +154,15 @@ Add UI
 assertions for important transitions and run VoiceOver/accessibility audits with
 large text separately from normal-size marketing screenshots.
 
+For persistence tests, wait for editor dismissal before backgrounding and terminating
+the app. Activate SpringBoard explicitly and wait for it to become foreground;
+the Home-button event alone does not reliably change Duo foreground state.
+After relaunch, wait for visible app content before querying
+navigation. Prefer typed list queries and exact `identifier` predicates over whole-tree
+`.any` lookups: a CI spindump showed broad identifier/label matching occupying the
+accessibility service during a post-launch query. Keep disk-persistence assertions;
+do not turn lifecycle failures into silently retried passes.
+
 Run local tests and fix failures before archiving. Upload the exact reviewed
 source revision to TestFlight. Keep CI screenshot artifacts for review; do not
 claim a GitHub run or Apple processing completed merely because a push/upload

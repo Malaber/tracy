@@ -11,8 +11,11 @@ final class TracyUITests: XCTestCase {
     @MainActor
     private func reveal(_ element: XCUIElement, in app: XCUIApplication) -> Bool {
         _ = element.waitForExistence(timeout: 3)
-        let summary = app.descendants(matching: .any).matching(identifier: "todaySummary").firstMatch
-        let details = app.descendants(matching: .any).matching(identifier: "todayDetails").firstMatch
+        // Lists are collection views. A broad `.any` identifier lookup also resolves
+        // labels throughout the SwiftUI tree, even when the compact layout has no
+        // split columns. CI spindumps showed that query monopolizing the AX service.
+        let summary = app.collectionViews.matching(NSPredicate(format: "identifier == %@", "todaySummary")).firstMatch
+        let details = app.collectionViews.matching(NSPredicate(format: "identifier == %@", "todayDetails")).firstMatch
         let surfaces = summary.exists ? [summary, details] : [app]
         for surface in surfaces {
             for _ in 0..<8 {
@@ -399,11 +402,24 @@ final class TracyUITests: XCTestCase {
         app.launchEnvironment["TRACY_UI_JOURNAL"] = UUID().uuidString
         app.launch()
         defer { app.terminate() }
+        func relaunchPersistedEntry() {
+            // Finish the sheet transition before ending the process. Backgrounding
+            // lets SpringBoard detach its accessibility session before termination.
+            XCTAssertTrue(app.buttons["saveEntry"].waitForNonExistence(timeout: 10))
+            let home = XCUIApplication(bundleIdentifier: "com.apple.springboard")
+            home.activate()
+            XCTAssertTrue(home.wait(for: .runningForeground, timeout: 10))
+            app.terminate()
+            XCTAssertTrue(app.wait(for: .notRunning, timeout: 10))
+            app.launch()
+            XCTAssertTrue(app.staticTexts["heroBillable"].waitForExistence(timeout: 15))
+        }
+        XCTAssertTrue(app.staticTexts["heroBillable"].waitForExistence(timeout: 15))
         XCTAssertTrue(self.reveal(app.buttons["quickAction"], in: app))
         app.buttons["quickAction"].tap()
         XCTAssertTrue(self.reveal(app.buttons["editToday"], in: app))
         app.buttons["editToday"].tap()
-        let form = app.descendants(matching: .any).matching(identifier: "entryForm").firstMatch
+        let form = app.collectionViews.matching(NSPredicate(format: "identifier == %@", "entryForm")).firstMatch
         func reveal(_ element: XCUIElement) {
             for _ in 0..<8 {
                 if element.exists && element.isHittable { return }
@@ -418,8 +434,7 @@ final class TracyUITests: XCTestCase {
         app.buttons["saveEntry"].tap()
         XCTAssertTrue(self.reveal(app.staticTexts["heroBreaks"], in: app))
         XCTAssertEqual(app.staticTexts["heroBreaks"].label, "0h 0m breaks deducted")
-        app.terminate()
-        app.launch()
+        relaunchPersistedEntry()
         XCTAssertTrue(self.reveal(app.buttons["editToday"], in: app))
         app.buttons["editToday"].tap()
         let add = app.buttons["Add break"]
@@ -445,8 +460,7 @@ final class TracyUITests: XCTestCase {
         app.buttons["saveEntry"].tap()
         XCTAssertTrue(self.reveal(app.staticTexts["heroBreaks"], in: app))
         XCTAssertEqual(app.staticTexts["heroBreaks"].label, "0h 0m breaks deducted")
-        app.terminate()
-        app.launch()
+        relaunchPersistedEntry()
         XCTAssertTrue(self.reveal(app.buttons["editToday"], in: app))
         app.buttons["editToday"].tap()
         reveal(add)
