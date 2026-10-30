@@ -210,8 +210,11 @@ struct TodayView: View {
                 .accessibilityValue("\(Int(progress * 100)) percent")
                 .accessibilityAddTraits(.isStaticText)
                 if !started {
-                    ContentUnavailableView("Ready to start the day?", systemImage: "cup.and.saucer",
-                                           description: Text("Tap below to check in."))
+                    VStack(spacing: 8) {
+                        Image(systemName: "cup.and.saucer").font(.title).accessibilityHidden(true)
+                        Text("Ready to start the day?").font(.headline)
+                        Text("Tap below to check in.").font(.subheadline).foregroundStyle(Color.primary.opacity(0.72))
+                    }.frame(maxWidth: .infinity).padding(.vertical, 8)
                 } else if minutes >= 480 {
                     Label(minutes == 480 ? "Daily goal reached" : "Goal exceeded by \(Clock.duration(minutes - 480))", systemImage: "trophy.fill")
                         .font(.subheadline.weight(.semibold))

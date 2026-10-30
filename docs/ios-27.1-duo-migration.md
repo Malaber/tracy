@@ -130,7 +130,14 @@ space on the inner display.
 
 Exercise closed → open → partially folded → closed while editing and while a
 session is running. Check selection, draft, focus, sheets and scroll position.
-Static screenshots do not establish that transitions preserve state. The native contrast
+Tracy's inner-display capture test also opens an editor during an active session,
+types an unsaved note, and changes the hinge through 0°, 180°, 90°, 180°, and 0°.
+It waits for the real display-size transition, verifies the draft and Save action,
+then saves and checks that the session remains active. Pose evidence is packaged
+under `review/duo-transitions`, separately from the forty App Store scenes.
+The hinge bridge runs only on localhost inside the test setup; it is absent from
+the production app. Static screenshots alone do not establish that transitions
+preserve state. The native contrast
 service can report text partially hidden by floating system bars. Recheck such rows
 fully onscreen; never discard a visible contrast failure. Tracy uses a fresh app launch
 per audited viewport, with deterministic scrolling, and a deliberately low-contrast

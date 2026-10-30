@@ -114,6 +114,22 @@ def start_native_capture(identifier, stage):
     class CaptureHandler(BaseHTTPRequestHandler):
         def do_GET(self):
             scene = self.path.removeprefix("/")
+            if scene in {"pose/0", "pose/90", "pose/180"}:
+                try:
+                    run(
+                        "xcrun",
+                        "simctl",
+                        "spawn",
+                        identifier,
+                        str(ROOT / "e2e-artifacts/app-store/duo-hinge"),
+                        scene.split("/")[1],
+                    )
+                    self.send_response(200)
+                    self.send_header("Content-Length", "0")
+                    self.end_headers()
+                except Exception as error:
+                    self.send_error(500, str(error))
+                return
             if scene not in SCENES:
                 self.send_error(404)
                 return
@@ -291,6 +307,16 @@ def main():
                 manifest["devices"][family] = package_device(
                     export, package / "en-US" / family, dimensions
                 )
+                if family.endswith("inner"):
+                    evidence = package / "review/duo-transitions"
+                    evidence.mkdir(parents=True)
+                    for test in json.loads((export / "manifest.json").read_text()):
+                        for attachment in test["attachments"]:
+                            name = attachment["suggestedHumanReadableName"]
+                            if name.startswith("Duo-editor-pose-"):
+                                shutil.copyfile(
+                                    export / attachment["exportedFileName"], evidence / name
+                                )
             finally:
                 if capture_server:
                     capture_server.shutdown()

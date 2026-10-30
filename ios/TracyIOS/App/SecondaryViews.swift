@@ -236,9 +236,11 @@ struct StatisticsView: View {
                             Text("Assumes 8h on \(forecast.remainingDays) remaining unfinished workdays, topping up today. Weekends, holidays and vacation excluded. Completed days stay unchanged.")
                         }
                     }
-                    Section("Project billable totals · saved days") {
-                        ForEach(statistics.projectTotals ?? [], id: \.projectId) { total in
-                            LabeledContent(store.projects.first(where: { $0.id == total.projectId })?.name ?? "Project \(total.projectId)", value: Clock.duration(total.minutes))
+                    if let projects = statistics.projectTotals, !projects.isEmpty {
+                        Section("Project billable totals · saved days") {
+                            ForEach(projects, id: \.projectId) { total in
+                                LabeledContent(store.projects.first(where: { $0.id == total.projectId })?.name ?? "Project \(total.projectId)", value: Clock.duration(total.minutes))
+                            }
                         }
                     }
                     if period != "year" {

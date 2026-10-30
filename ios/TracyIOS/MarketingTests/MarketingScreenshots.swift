@@ -99,5 +99,49 @@ final class MarketingScreenshots: XCTestCase {
         launch("dark", state: "--ui-completed-day")
         try await capture("09-completed-day")
         app.terminate()
+        if innerDisplay {
+            launch("light")
+            for _ in 0..<6 {
+                if app.buttons["editToday"].isHittable { break }
+                scrollToday(up: true)
+            }
+            app.buttons["editToday"].tap()
+            let notes = app.descendants(matching: .any).matching(identifier: "entryNotes").firstMatch
+            let form = app.descendants(matching: .any).matching(identifier: "entryForm").firstMatch
+            for _ in 0..<8 {
+                if notes.exists && notes.isHittable { break }
+                form.swipeUp()
+            }
+            XCTAssertTrue(notes.isHittable)
+            notes.tap()
+            notes.typeText("Duo transition draft")
+            let config = try XCTUnwrap(Bundle(for: Self.self).url(forResource: "capture-port", withExtension: "txt"))
+            let port = try String(contentsOf: config, encoding: .utf8).trimmingCharacters(in: .whitespacesAndNewlines)
+            for (index, angle) in [0, 180, 90, 180, 0].enumerated() {
+                let url = try XCTUnwrap(URL(string: "http://127.0.0.1:\(port)/pose/\(angle)"))
+                let (_, response) = try await URLSession.shared.data(from: url)
+                XCTAssertEqual((response as? HTTPURLResponse)?.statusCode, 200)
+                // Area is orientation-independent; wait for the actual display
+                // switch instead of assuming the injected hinge event has settled.
+                let expectedArea: CGFloat = angle == 0 ? 466 * 678 : 669 * 951
+                let displayChanged = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in
+                    abs(app.frame.width * app.frame.height - expectedArea) < 2
+                }, object: nil)
+                await fulfillment(of: [displayChanged], timeout: 15)
+                XCTAssertTrue(app.buttons["saveEntry"].waitForExistence(timeout: 10))
+                XCTAssertTrue((notes.value as? String)?.contains("Duo transition draft") == true)
+                let evidence = XCTAttachment(screenshot: XCUIScreen.main.screenshot())
+                evidence.name = "Duo-editor-pose-\(index)-\(angle)"
+                evidence.lifetime = .keepAlways
+                add(evidence)
+            }
+            app.buttons["saveEntry"].tap()
+            for _ in 0..<6 {
+                if app.buttons["quickAction"].isHittable { break }
+                scrollToday(up: false, summary: true)
+            }
+            XCTAssertEqual(app.buttons["quickAction"].label, "Check out now")
+            app.terminate()
+        }
     }
 }
