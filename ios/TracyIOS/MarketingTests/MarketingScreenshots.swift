@@ -60,12 +60,19 @@ final class MarketingScreenshots: XCTestCase {
         app.buttons["Recent Days"].firstMatch.tap()
         XCTAssertTrue(app.switches["Needs attention only"].waitForExistence(timeout: 5))
         try await capture("03-recent-days")
-        app.buttons["Today"].firstMatch.tap()
-        for _ in 0..<6 {
-            if app.buttons["quickAction"].isHittable { break }
-            scrollToday(up: false, summary: true)
-        }
-        app.buttons["quickAction"].tap()
+        // Returning from Recent Days preserves Today’s scroll offset. XCTest may
+        // report a button hidden behind the translucent navigation bar as hittable.
+        // Start this independent scene at a known scroll position and verify the
+        // checkout transition before searching for its pending-sync status.
+        app.terminate()
+        launch("light")
+        let checkout = app.buttons["quickAction"]
+        XCTAssertEqual(checkout.label, "Check out now")
+        XCTAssertTrue(checkout.isHittable)
+        checkout.tap()
+        let checkedOut = NSPredicate(format: "label CONTAINS %@", "Checked out")
+        let status = app.staticTexts["workingStatus"]
+        await fulfillment(of: [XCTNSPredicateExpectation(predicate: checkedOut, object: status)], timeout: 10)
         let syncStatus = app.descendants(matching: .any).matching(identifier: "syncStatusTitle").firstMatch
         for _ in 0..<8 {
             if syncStatus.exists && syncStatus.isHittable { break }

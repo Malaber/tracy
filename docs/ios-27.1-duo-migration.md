@@ -97,7 +97,7 @@ Tracy's entrypoint:
 .codex/setup.sh --ios
 .venv/bin/inv capture-ios-screenshots
 # Focused iteration, same capture pipeline:
-.venv/bin/python scripts/capture_ios_screenshots.py --version 0.2.8 --device iphone-duo-inner
+.venv/bin/python scripts/capture_ios_screenshots.py --version 0.3.0 --device iphone-duo-inner
 ```
 
 The GitHub screenshot workflow includes both Duo displays plus iPhone and iPad.
