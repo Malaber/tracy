@@ -18,6 +18,7 @@
 		65589C874754D43DF0A592E6 /* TracyUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8CE178044A01404A4969F5BE /* TracyUITests.swift */; };
 		7F41B341D99E38A04D047E7D /* Authentication.swift in Sources */ = {isa = PBXBuildFile; fileRef = 15B1267AAD0731C3290E34C0 /* Authentication.swift */; };
 		923966D03F2C27BF0E4DE9AA /* WorkdayNotifications.swift in Sources */ = {isa = PBXBuildFile; fileRef = E74D79E827E26A7216524491 /* WorkdayNotifications.swift */; };
+		989AD9E2321C0592B9D819AE /* DesignSystem.swift in Sources */ = {isa = PBXBuildFile; fileRef = B108D8C122914BCF4A302135 /* DesignSystem.swift */; };
 		9EF6949C12F5DFC3173C98CE /* AppStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = FC46A697DE72816095362688 /* AppStore.swift */; };
 		C70D4EC4276438E85636DE24 /* RootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C33D5B25355F68F0BC190404 /* RootView.swift */; };
 		D4D75DEBCCFE382190236258 /* MarketingScreenshots.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9DB381EE7738E6B22966F13A /* MarketingScreenshots.swift */; };
@@ -60,6 +61,7 @@
 		8CE178044A01404A4969F5BE /* TracyUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TracyUITests.swift; sourceTree = "<group>"; };
 		93589588D442ED5BA4AD47F8 /* SecondaryViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SecondaryViews.swift; sourceTree = "<group>"; };
 		9DB381EE7738E6B22966F13A /* MarketingScreenshots.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MarketingScreenshots.swift; sourceTree = "<group>"; };
+		B108D8C122914BCF4A302135 /* DesignSystem.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DesignSystem.swift; sourceTree = "<group>"; };
 		C33D5B25355F68F0BC190404 /* RootView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RootView.swift; sourceTree = "<group>"; };
 		C91E53FABCF034848B321B58 /* TracyIOS */ = {isa = PBXFileReference; lastKnownFileType = folder; name = TracyIOS; path = .; sourceTree = SOURCE_ROOT; };
 		C983F527A8764079A8A2EAFF /* EntryEditor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EntryEditor.swift; sourceTree = "<group>"; };
@@ -134,6 +136,7 @@
 			children = (
 				FC46A697DE72816095362688 /* AppStore.swift */,
 				15B1267AAD0731C3290E34C0 /* Authentication.swift */,
+				B108D8C122914BCF4A302135 /* DesignSystem.swift */,
 				C983F527A8764079A8A2EAFF /* EntryEditor.swift */,
 				02B0D9A5212BEB67E006CBB1 /* Info.plist */,
 				44373DA96AA94049011C34A8 /* LayoutCheckedText.swift */,
@@ -298,6 +301,7 @@
 			files = (
 				9EF6949C12F5DFC3173C98CE /* AppStore.swift in Sources */,
 				7F41B341D99E38A04D047E7D /* Authentication.swift in Sources */,
+				989AD9E2321C0592B9D819AE /* DesignSystem.swift in Sources */,
 				598AF216C11195D5A5072224 /* EntryEditor.swift in Sources */,
 				00B7067482423FB58C459CEA /* LayoutCheckedText.swift in Sources */,
 				089FB0B8D831FC6736866E0A /* ProjectsView.swift in Sources */,

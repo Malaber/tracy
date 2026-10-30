@@ -35,7 +35,7 @@ def test_package_requires_full_set_and_removes_alpha(tmp_path):
     export = captures(tmp_path)
     target = tmp_path / "ready"
     manifest = package_device(export, target, (8, 16))
-    assert len(manifest) == 5
+    assert len(manifest) == len(SCENES)
     for entry in manifest:
         with Image.open(target / entry["file"]) as image:
             assert image.mode == "RGB"
@@ -63,4 +63,11 @@ def test_package_rejects_incomplete_or_failed_capture(tmp_path, problem):
         items[0]["isAssociatedWithFailure"] = True
     path.write_text(json.dumps(data))
     with pytest.raises(ValueError):
+        package_device(export, tmp_path / "ready", (8, 16))
+
+
+def test_package_rejects_inactive_black_display(tmp_path):
+    export = captures(tmp_path)
+    Image.new("RGB", (8, 16), (0, 0, 0)).save(export / f"{SCENES[0]}.png")
+    with pytest.raises(ValueError, match="inactive display"):
         package_device(export, tmp_path / "ready", (8, 16))

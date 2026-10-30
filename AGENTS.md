@@ -11,11 +11,15 @@ commands whenever an Invoke task exists.
 - `.venv/bin/inv verify` runs all local checks.
 - `.venv/bin/inv start` starts the application for local use.
 - `.venv/bin/inv check-ios-package` tests native time-entry and offline-sync logic.
-- `.venv/bin/inv build-ios-simulator` generates and builds the native app (Xcode 26+, XcodeGen).
+- `.venv/bin/inv build-ios-simulator` generates and builds the native app (Xcode 27.1, XcodeGen).
 - `.venv/bin/inv check-ios-ui` runs native UI and accessibility tests on an installed iPhone simulator.
 
 New calculation, API, or UI behavior should include focused automated coverage. Keep the local
 SQLite database out of version control and use a temporary database for tests.
+
+Use Xcode 27.1 and the iOS 27.1 SDK for all new native development. Keep the iOS 27.0
+simulator runtime for ordinary iPhone/iPad testing until newer runtimes support those device types.
+See [Duo migration guide](docs/ios-27.1-duo-migration.md) for the pinned runtime matrix.
 
 ## Release workflow
 

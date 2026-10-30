@@ -2,6 +2,7 @@ import SwiftUI
 import TracyCore
 
 struct RootView: View {
+    @State private var selectedTab = "today"
     @EnvironmentObject private var store: AppStore
     @Environment(\.scenePhase) private var scenePhase
     @EnvironmentObject private var notifications: WorkdayNotifications
@@ -12,11 +13,11 @@ struct RootView: View {
             if store.credential == nil {
                 SignInView()
             } else {
-                TabView {
-                    TodayView().tabItem { Label("Today", systemImage: "clock") }
-                    RecentDaysView().tabItem { Label("Recent Days", systemImage: "calendar") }
-                    StatisticsView().tabItem { Label("Statistics", systemImage: "chart.bar") }
-                    SettingsView().tabItem { Label("Settings", systemImage: "gearshape") }
+                TabView(selection: $selectedTab) {
+                    TodayView(selectedTab: $selectedTab).tabItem { Label("Today", systemImage: "clock") }.tag("today")
+                    RecentDaysView().tabItem { Label("Recent Days", systemImage: "calendar") }.tag("recent")
+                    StatisticsView().tabItem { Label("Statistics", systemImage: "chart.bar") }.tag("statistics")
+                    SettingsView().tabItem { Label("Settings", systemImage: "gearshape") }.tag("settings")
                 }
             }
         }
@@ -60,20 +61,24 @@ struct RootView: View {
 
 struct SyncStatus: View {
     @EnvironmentObject private var store: AppStore
+    private var title: String {
+        store.isSyncing ? "Syncing…" : store.pendingCount > 0
+            ? "\(store.pendingCount) \(store.pendingCount == 1 ? "day" : "days") waiting to sync" : "Saved data"
+    }
     var body: some View {
         if store.pendingCount > 0 || store.notice != nil || store.isSyncing {
             Section {
                 VStack(alignment: .leading, spacing: 8) {
                     Label(
-                        store.isSyncing
-                            ? "Syncing…"
-                            : store.pendingCount > 0
-                                ? "\(store.pendingCount) days waiting to sync" : "Saved data",
+                        title,
                         systemImage: store.isSyncing ? "arrow.triangle.2.circlepath" : "icloud.and.arrow.up"
                     )
                     .font(.headline)
+                    .accessibilityElement(children: .ignore)
+                    .accessibilityLabel(title)
+                    .accessibilityIdentifier("syncStatusTitle")
                     if let notice = store.notice {
-                        Text(notice).font(.subheadline).foregroundStyle(.primary)
+                        Text(notice).font(.subheadline).foregroundStyle(Color.primary)
                     }
                     if store.needsSignIn {
                         Text("Open Settings to sign in again.").font(.subheadline)
@@ -89,177 +94,304 @@ struct SyncStatus: View {
 }
 
 struct TodayView: View {
+    @Binding var selectedTab: String
     @EnvironmentObject private var store: AppStore
+    @Environment(\.horizontalSizeClass) private var widthClass
+    @Environment(\.dynamicTypeSize) private var typeSize
+    @ScaledMetric(relativeTo: .largeTitle) private var totalSize = 44
     @State private var editing: WorkEntry?
     @State private var showSessionAction = false
     @State private var showVacation = false
     private var entry: WorkEntry { store.entry(store.today) }
+    private var active: Bool { entry.checkIn != nil && entry.checkOut == nil }
+    private var started: Bool { entry.checkIn != nil }
+    private var minutes: Int { store.signOffEstimate?.billableMinutes ?? entry.billableMinutes ?? 0 }
+    private var breaks: Int { store.signOffEstimate?.breakMinutes ?? entry.breakMinutes }
+    private var progress: Double { min(1, max(0, Double(minutes) / 480)) }
 
     var body: some View {
-        NavigationStack {
-            List {
-                #if DEBUG
-                    if ProcessInfo.processInfo.arguments.contains("--ui-clipping-negative-control") {
-                        LayoutCheckedText(
-                            "Deliberately clipped text proves measurement detects truncation", key: "negative"
-                        )
-                        .lineLimit(1).frame(width: 40)
+        Group {
+            if widthClass == .regular && !typeSize.isAccessibilitySize {
+                // Native split columns adapt their margins around Duo's folding region.
+                NavigationSplitView {
+                    List { clippingNegativeControl; dateHeader; heroSection; weeklySection }
+                        .accessibilityIdentifier("todaySummary")
+                        .modifier(TracyListStyle())
+                        .navigationTitle("Today")
+                        .navigationSplitViewColumnWidth(min: 320, ideal: 360, max: 420)
+                        .toolbar { vacationToolbar }
+                        .refreshable { await store.refresh() }
+                } detail: {
+                    List { detailsSection; actionsSection; reviewSections; SyncStatus() }
+                        .accessibilityIdentifier("todayDetails")
+                        .modifier(TracyListStyle())
+                        .navigationTitle("Day details")
+                        .refreshable { await store.refresh() }
+                }
+                .navigationSplitViewStyle(.balanced)
+            } else {
+                NavigationStack {
+                    List {
+                        clippingNegativeControl
+                        dateHeader
+                        heroSection
+                        detailsSection
+                        actionsSection
+                        weeklySection
+                        reviewSections
+                        SyncStatus()
                     }
-                #endif
-                Section {
-                    VStack(alignment: .leading, spacing: 8) {
-                        LayoutCheckedText(Clock.title(store.today), key: "date")
-                            .font(.subheadline).foregroundStyle(.primary)
-                        LayoutCheckedText(headline, key: "headline").font(.largeTitle.bold())
-                            .accessibilityAddTraits(.isHeader)
-                            .accessibilityHint(subtitle)
-                        if (store.signOffEstimate?.billableMinutes ?? entry.billableMinutes) != nil {
-                            LayoutCheckedText("Billable time", key: "billable")
-                                .font(.subheadline).accessibilityIdentifier("heroBillable")
-                        }
-                        LayoutCheckedText("\(Clock.duration(store.signOffEstimate?.breakMinutes ?? entry.breakMinutes)) breaks deducted", key: "breaks")
-                            .font(.footnote).accessibilityIdentifier("heroBreaks")
-                        let minutes = store.signOffEstimate?.billableMinutes ?? entry.billableMinutes ?? 0
-                        let progress = min(1, max(0, Double(minutes) / 480))
-                        ProgressView(value: progress) {
-                            Text(store.signOffEstimate != nil ? "If you check out now · 8h goal" : "8h working-day goal")
-                        }
+                    .modifier(TracyListStyle())
+                    .navigationTitle("Today")
+                    .toolbar { vacationToolbar }
+                    .refreshable { await store.refresh() }
+                }
+            }
+        }
+        .sheet(isPresented: $showSessionAction) { SessionActionSheet(checkOut: active) }
+        .sheet(isPresented: $showVacation) { VacationEditor(initialDay: store.today) }
+        .sheet(item: $editing) { EntryEditor(entry: $0) }
+    }
+
+    @ViewBuilder private var clippingNegativeControl: some View {
+        #if DEBUG
+        if ProcessInfo.processInfo.arguments.contains("--ui-contrast-negative-control") {
+            Text("Deliberately low contrast")
+                .foregroundStyle(Color(white: 0.97)).listRowBackground(Color.white)
+        }
+        if ProcessInfo.processInfo.arguments.contains("--ui-clipping-negative-control") {
+            LayoutCheckedText("Deliberately clipped text proves measurement detects truncation", key: "negative")
+                .lineLimit(1).frame(width: 40)
+        }
+        #endif
+    }
+
+    private var vacationToolbar: some ToolbarContent {
+        ToolbarItem(placement: .primaryAction) {
+            Button("Vacation", systemImage: "calendar.badge.plus") { showVacation = true }
+                .accessibilityIdentifier("manageVacation")
+        }
+    }
+
+    private var dateHeader: some View {
+        LayoutCheckedText(Clock.title(store.today), key: "date")
+            .font(.headline).foregroundStyle(Color.primary.opacity(0.72))
+            .listRowBackground(Color.clear)
+            .listRowSeparator(.hidden)
+            .listRowInsets(EdgeInsets(top: 0, leading: 4, bottom: 0, trailing: 4))
+    }
+
+    private var heroSection: some View {
+        Section {
+            VStack(alignment: .leading, spacing: 20) {
+                ViewThatFits(in: .horizontal) {
+                    HStack(alignment: .top, spacing: 12) { total; status }
+                        .fixedSize(horizontal: true, vertical: false)
+                    VStack(alignment: .leading, spacing: 12) { total; status }
+                }
+                let metricLayout = typeSize.isAccessibilitySize
+                    ? AnyLayout(VStackLayout(alignment: .leading, spacing: 12))
+                    : AnyLayout(HStackLayout(alignment: .top, spacing: 20))
+                metricLayout { breakMetric; goalMetric }
+                .fixedSize(horizontal: false, vertical: true)
+                VStack(alignment: .leading, spacing: 6) {
+                    ProgressView(value: progress)
                         .tint(Color(hue: (35 + 105 * progress) / 360, saturation: 0.75, brightness: 0.75))
-                        .accessibilityLabel("8-hour working day")
-                        .accessibilityValue("\(Int(progress * 100)) percent")
-                        let checkingOut = entry.checkIn != nil && entry.checkOut == nil
-                        HStack(spacing: 0) {
-                            Button { store.quickAction(checkOut: checkingOut) } label: {
-                                LayoutCheckedText(checkingOut ? "Check out now" : "Check in now", key: "action")
-                                    .font(.headline).frame(maxWidth: .infinity).padding(.vertical, 8)
-                            }.accessibilityIdentifier("quickAction")
-                            Divider().frame(height: 28)
-                            Button { showSessionAction = true } label: {
-                                Image(systemName: "chevron.down").frame(width: 44, height: 44)
-                            }
-                            .accessibilityLabel(checkingOut ? "Checkout project and time options" : "Check-in project and time options")
-                            .accessibilityIdentifier("sessionActionOptions")
-                        }.modifier(PrimaryActionStyle())
-                        if entry.checkOut != nil {
-                            Button("Undo checkout") { store.reopenToday(recordGap: false) }
-                                .accessibilityIdentifier("undoCheckout")
-                        }
-                        if let projectId = entry.sessions?.last?.projectId,
-                           let project = store.projects.first(where: { $0.id == projectId }) {
-                            Text(project.name).font(.footnote)
-                        }
-
-                    }
-                    .padding(.vertical, 8)
+                        .accessibilityHidden(true)
+                    HStack {
+                        Text(store.signOffEstimate != nil ? "If you check out now" : "Daily progress")
+                        Spacer()
+                        Text("8h").monospacedDigit()
+                    }.font(.caption).foregroundStyle(Color.primary.opacity(0.72))
                 }
-                Section {
-                    dayValue("Check-in", value: entry.checkIn ?? "Not entered")
-                    dayValue(
-                        "Check-out",
-                        value: (entry.checkOut ?? "Not entered")
-                            + (entry.checkOutNextDay ? " · next day" : ""))
-                    ForEach(Array((entry.sessions ?? []).enumerated()), id: \.offset) { _, session in
-                        let project = store.projects.first { $0.id == session.projectId }?.name ?? "Unassigned"
-                        LabeledContent(project, value: "\(WorkSession.clock(session.start)) – \(session.end.map(WorkSession.clock) ?? "Working")")
-                    }
-                    if !entry.notes.isEmpty { Text(entry.notes) }
-                    Button {
-                        editing = entry
-                    } label: {
-                        LayoutCheckedText("Edit today’s entry", key: "edit").foregroundStyle(Color(uiColor: .label))
-                    }
-                    .accessibilityIdentifier("editToday")
-                } header: {
-                    LayoutCheckedText("Your day", key: "section").foregroundStyle(Color(uiColor: .label))
+                .frame(minHeight: 44)
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel("8-hour working day")
+                .accessibilityValue("\(Int(progress * 100)) percent")
+                .accessibilityAddTraits(.isStaticText)
+                if !started {
+                    VStack(spacing: 8) {
+                        Image(systemName: "cup.and.saucer").font(.title).accessibilityHidden(true)
+                        Text("Ready to start the day?").font(.headline)
+                        Text("Tap below to check in.").font(.subheadline).foregroundStyle(Color.primary.opacity(0.72))
+                    }.frame(maxWidth: .infinity).padding(.vertical, 8)
+                } else if minutes >= 480 {
+                    Label(minutes == 480 ? "Daily goal reached" : "Goal exceeded by \(Clock.duration(minutes - 480))", systemImage: "trophy.fill")
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(Color.primary)
+                        .padding(12).frame(maxWidth: .infinity, alignment: .leading)
+                        .background(Color.green.opacity(0.12), in: RoundedRectangle(cornerRadius: 12))
                 }
-                if let remote = store.conflict(store.today) {
-                    Section {
-                        NavigationLink {
-                            ConflictView(date: store.today, remote: remote)
-                        } label: {
-                            Label(
-                                "Review a sync conflict",
-                                systemImage: "exclamationmark.arrow.triangle.2.circlepath")
-                        }
-                    }
-                }
-                if let savedWeek = store.snapshot.week,
-                    savedWeek.start <= store.today && store.today <= savedWeek.end {
-                    let week = savedWeek.projecting(store.signOffEstimate, date: store.today)
-                    Section("This week") {
-                        LabeledContent("Billable time", value: Clock.duration(week.summary.billableMinutes))
-                        LabeledContent("Target", value: Clock.duration(week.summary.targetMinutes))
-                        LabeledContent("Balance", value: Clock.duration(week.summary.billableMinutes - week.summary.targetMinutes))
-                        if store.signOffEstimate != nil {
-                            Text("Includes live sign-off estimate").font(.footnote).foregroundStyle(.secondary)
-                        }
-                    }
-                }
-                let attention =
-                    store.snapshot.recent?.days.filter {
-                        $0.needsAttention(today: store.today) && !store.isPending($0.date)
-                    } ?? []
-                if !attention.isEmpty {
-                    Section {
-                        NavigationLink {
-                            RecentDaysView()
-                        } label: {
-                            LayoutCheckedText("\(attention.count) recent days need a look", key: "review").foregroundStyle(Color(uiColor: .label))
-                        }
-                    }
-                }
-                SyncStatus()
+                if active || !started { quickAction }
             }
-            .modifier(ReadableScrollEdge())
-            .navigationTitle("Today")
-            .toolbar {
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button("Vacation", systemImage: "calendar.badge.plus") { showVacation = true }
-                        .accessibilityIdentifier("manageVacation")
-                }
-            }
-            .sheet(isPresented: $showSessionAction) {
-                SessionActionSheet(checkOut: entry.checkIn != nil && entry.checkOut == nil)
-            }
-            .sheet(isPresented: $showVacation) { VacationEditor(initialDay: store.today) }
-            .refreshable { await store.refresh() }
-            .sheet(item: $editing) { EntryEditor(entry: $0) }
+            .padding(.vertical, 8)
+            .listRowInsets(EdgeInsets(top: 16, leading: 20, bottom: 16, trailing: 20))
+            .listRowBackground(Color(uiColor: .secondarySystemGroupedBackground))
         }
     }
 
-    private func dayValue(_ label: String, value: String) -> some View {
+    private var total: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            LayoutCheckedText("Billable time", key: "billable")
+                .font(.subheadline).foregroundStyle(Color.primary.opacity(0.72)).accessibilityIdentifier("heroBillable")
+            LayoutCheckedText(Clock.duration(minutes), key: "headline")
+                .font(.system(size: totalSize, weight: .bold, design: .rounded)).monospacedDigit()
+                .accessibilityAddTraits(.isHeader).accessibilityLabel("Today's billable time, \(Clock.duration(minutes))")
+        }
+    }
+
+    @ViewBuilder private var status: some View {
+        if started {
+            HStack(spacing: 8) {
+                Image(systemName: active ? "clock.fill" : "checkmark.circle.fill")
+                    .foregroundStyle(active ? Color("AccentColor") : .green)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(active ? "Working" : "Checked out").font(.subheadline.weight(.semibold))
+                    Text("Since \((active ? entry.sessions?.last.map { WorkSession.clock($0.start) } ?? entry.checkIn : entry.checkOut) ?? "")")
+                        .font(.caption)
+                }
+            }
+            .fixedSize(horizontal: false, vertical: true)
+            .padding(10)
+            .background((active ? Color("AccentColor") : .green).opacity(0.12), in: Capsule())
+            .accessibilityElement(children: .combine)
+            .accessibilityIdentifier("workingStatus")
+        }
+    }
+
+    private var breakMetric: some View {
+        HStack(spacing: 10) {
+            MetricIcon(symbol: "cup.and.saucer")
+            VStack(alignment: .leading, spacing: 2) {
+                LayoutCheckedText(Clock.duration(breaks), key: "breaks")
+                    .font(.subheadline.weight(.semibold))
+                    .accessibilityLabel("\(Clock.duration(breaks)) breaks deducted")
+                    .accessibilityIdentifier("heroBreaks")
+                Text("Breaks deducted").font(.caption).foregroundStyle(Color.primary.opacity(0.72))
+            }
+        }
+    }
+    private var goalMetric: some View {
+        Label {
+            VStack(alignment: .leading) {
+                Text("8h 0m").font(.subheadline.weight(.semibold))
+                Text("Daily goal").font(.caption).foregroundStyle(Color.primary.opacity(0.72))
+            }
+        } icon: { MetricIcon(symbol: "target") }
+    }
+
+    private var actionTitle: some View {
+        LayoutCheckedText(active ? "Check out now" : started ? "Check in again" : "Check in now", key: "action")
+            .fixedSize(horizontal: false, vertical: true)
+    }
+
+    private var quickAction: some View {
+        let layout = typeSize.isAccessibilitySize
+            ? AnyLayout(VStackLayout(spacing: 8)) : AnyLayout(HStackLayout(spacing: 8))
+        return layout {
+            Button { store.quickAction(checkOut: active) } label: {
+                Group {
+                    if typeSize.isAccessibilitySize {
+                        actionTitle
+                    } else {
+                        Label { actionTitle } icon: { Image(systemName: active ? "stop.fill" : "play.fill") }
+                    }
+                }
+                .font(.headline).frame(maxWidth: .infinity).padding(.vertical, 8)
+            }.accessibilityIdentifier("quickAction")
+            Button { showSessionAction = true } label: {
+                HStack {
+                    if typeSize.isAccessibilitySize { Text("Project and time options").fixedSize(horizontal: false, vertical: true) }
+                    Image(systemName: "chevron.down")
+                }
+                .frame(minWidth: 28, minHeight: 44)
+                .frame(maxWidth: typeSize.isAccessibilitySize ? .infinity : nil)
+            }
+            .accessibilityLabel(active ? "Checkout project and time options" : "Check-in project and time options")
+            .accessibilityIdentifier("sessionActionOptions")
+        }
+        .modifier(PrimaryActionStyle())
+    }
+
+    private var detailsSection: some View {
+        Section {
+            if !started {
+                ContentUnavailableView("No entries yet", systemImage: "doc.badge.clock",
+                                       description: Text("Check in to start tracking your working time."))
+            } else {
+                dayValue("Check-in", value: entry.checkIn ?? "Not entered", symbol: "rectangle.portrait.and.arrow.right")
+                dayValue("Check-out", value: (entry.checkOut ?? "Working") + (entry.checkOutNextDay ? " · next day" : ""), symbol: "rectangle.portrait.and.arrow.forward")
+                MetricRow(title: "Break time (deducted)", value: Clock.duration(breaks), symbol: "cup.and.saucer")
+                MetricRow(title: "Total billable time", value: Clock.duration(minutes), symbol: "clock")
+                ForEach(Array((entry.sessions ?? []).enumerated()), id: \.offset) { _, session in
+                    let project = store.projects.first { $0.id == session.projectId }?.name ?? "Unassigned"
+                    MetricRow(title: project, value: "\(WorkSession.clock(session.start)) – \(session.end.map(WorkSession.clock) ?? "Working")", symbol: "folder")
+                }
+                if !entry.notes.isEmpty { Text(entry.notes) }
+            }
+        } header: {
+            LayoutCheckedText(started ? "Day details" : "Your day", key: "section").foregroundStyle(Color.primary)
+        }
+    }
+
+    private var actionsSection: some View {
+        Section {
+            if started && !active {
+                quickAction
+                Button { store.reopenToday(recordGap: false) } label: { ActionRow(title: "Undo checkout", symbol: "arrow.uturn.backward") }
+                    .accessibilityIdentifier("undoCheckout")
+            }
+            Button { editing = entry } label: {
+                HStack(spacing: 12) {
+                    MetricIcon(symbol: "pencil", tint: Color("AccentColor"))
+                    LayoutCheckedText("Edit today’s entry", key: "edit").foregroundStyle(Color.primary)
+                    Spacer(minLength: 0)
+                    Image(systemName: "chevron.right").font(.caption).foregroundStyle(Color.primary.opacity(0.72))
+                }.padding(.vertical, 4)
+            }.accessibilityIdentifier("editToday")
+        }
+    }
+
+    @ViewBuilder private var weeklySection: some View {
+        if let saved = store.snapshot.week, saved.start <= store.today && store.today <= saved.end {
+            let week = store.currentStatistics(saved)
+            Section {
+                Button { selectedTab = "statistics" } label: {
+                    MetricRow(title: "Billable time", value: Clock.duration(week.summary.billableMinutes), symbol: "chart.bar.fill")
+                }
+                MetricRow(title: "Target", value: Clock.duration(week.summary.targetMinutes), symbol: "target")
+                MetricRow(title: "Balance", value: Clock.duration(week.summary.billableMinutes - week.summary.targetMinutes), symbol: "plusminus")
+            } header: {
+                Text("This week").foregroundStyle(Color.primary)
+            }
+        }
+    }
+
+    @ViewBuilder private var reviewSections: some View {
+        if let remote = store.conflict(store.today) {
+            Section {
+                NavigationLink { ConflictView(date: store.today, remote: remote) } label: {
+                    Label("Review a sync conflict", systemImage: "exclamationmark.arrow.triangle.2.circlepath")
+                }
+            }
+        }
+        let attention = store.snapshot.recent?.days.filter { $0.needsAttention(today: store.today) && !store.isPending($0.date) } ?? []
+        if !attention.isEmpty {
+            Section {
+                Button { selectedTab = "recent" } label: {
+                    LayoutCheckedText("\(attention.count) recent days need a look", key: "review").foregroundStyle(Color.primary)
+                }
+            }
+        }
+    }
+
+    private func dayValue(_ label: String, value: String, symbol: String) -> some View {
         LabeledContent {
-            LayoutCheckedText(value, key: "value.\(label)").foregroundStyle(.primary)
+            LayoutCheckedText(value, key: "value.\(label)").foregroundStyle(Color.primary).monospacedDigit()
         } label: {
-            LayoutCheckedText(label, key: "label.\(label)")
-        }
-    }
-
-    private var headline: String {
-        if let estimate = store.signOffEstimate { return Clock.duration(estimate.billableMinutes) }
-        if let minutes = entry.billableMinutes { return Clock.duration(minutes) }
-        if store.isPending(store.today) {
-            return entry.checkOut == nil ? "Your day is underway" : "Your day, recorded"
-        }
-        return entry.checkIn == nil ? "Ready when you are" : "Your day is underway"
-    }
-    private var subtitle: String {
-        if store.isPending(store.today) { return "Saved on this device. Billable time uses your last synced rounding setting." }
-        if entry.checkOut != nil { return "Working time recorded for today." }
-        return entry.checkIn == nil
-            ? "One tap to start. A moment to review."
-            : "Checked in at \(entry.checkIn ?? ""). Check out when you finish."
-    }
-}
-
-/// Keep readable rows above the tab bar outside its gradual fade.
-struct ReadableScrollEdge: ViewModifier {
-    @ViewBuilder func body(content: Content) -> some View {
-        if #available(iOS 26.0, *) {
-            content.scrollEdgeEffectStyle(.hard, for: .bottom)
-        } else {
-            content
-        }
+            Label { LayoutCheckedText(label, key: "label.\(label)") } icon: { MetricIcon(symbol: symbol) }
+        }.padding(.vertical, 3)
+            .accessibilityElement(children: .combine)
     }
 }
 
@@ -267,7 +399,7 @@ struct PrimaryActionStyle: ViewModifier {
     @Environment(\.colorScheme) private var colorScheme
     @ViewBuilder func body(content: Content) -> some View {
         if #available(iOS 26.0, *) {
-            content.buttonStyle(.borderedProminent).foregroundStyle(
+            content.buttonStyle(.borderedProminent).buttonBorderShape(.capsule).foregroundStyle(
                 colorScheme == .dark ? Color.black : Color.white)
         } else {
             content.buttonStyle(.borderedProminent)
@@ -327,7 +459,7 @@ struct RecentDaysView: View {
                 Section {
                     Toggle("Needs attention only", isOn: $onlyAttention)
                     Text("Review the past two weeks, or open any date below.")
-                        .font(.subheadline).foregroundStyle(.primary)
+                        .font(.subheadline).foregroundStyle(Color.primary)
                 }
                 Section("Recent days") {
                     let visible = dates.filter { !onlyAttention || needsAttention($0) }
@@ -362,6 +494,7 @@ struct RecentDaysView: View {
                     }.disabled(loadingDate)
                 }
             }
+            .modifier(TracyListStyle())
             .navigationTitle("Recent Days")
             .refreshable { await store.refresh() }
             .sheet(item: $editing) { EntryEditor(entry: $0) }
@@ -379,7 +512,7 @@ struct RecentDaysView: View {
         let pending = store.isPending(date)
         let conflict = store.conflict(date) != nil
         return VStack(alignment: .leading, spacing: 6) {
-            Text(Clock.title(date)).font(.headline)
+            Label(Clock.title(date), systemImage: "calendar").font(.headline)
             if let start = entry.checkIn {
                 Text(
                     "\(start) – \(entry.checkOut ?? "Check-out missing")\(entry.checkOutNextDay ? " (+1 day)" : "")"
@@ -402,7 +535,7 @@ struct RecentDaysView: View {
             )
             .font(.subheadline).foregroundStyle(needsAttention(date) ? Color.primary : Color.secondary)
             if let exact = entry.billableMinutes, !pending {
-                Text(Clock.duration(exact)).font(.subheadline).foregroundStyle(.primary)
+                Text("\(Clock.duration(exact)) billable").font(.title3.weight(.semibold)).monospacedDigit().foregroundStyle(Color.primary)
             }
         }
         .padding(.vertical, 5)

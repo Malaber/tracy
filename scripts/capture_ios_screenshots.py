@@ -2,6 +2,8 @@
 
 import argparse
 import hashlib
+from http.server import BaseHTTPRequestHandler, HTTPServer
+import threading
 import json
 import plistlib
 from pathlib import Path
@@ -15,12 +17,29 @@ from PIL import Image
 
 ROOT = Path(__file__).resolve().parents[1]
 IOS = ROOT / "ios/TracyIOS"
-RUNTIME = "com.apple.CoreSimulator.SimRuntime.iOS-26-2"
-DEVICES = {
-    "iphone-6.5": ("iPhone 13 Pro Max", (1284, 2778)),
-    "ipad-13": ("iPad Pro 13-inch (M5)", (2064, 2752)),
+DERIVED_DATA = ROOT / "e2e-artifacts/ios-marketing-derived-data"
+RUNTIMES = {
+    "27.0": ("com.apple.CoreSimulator.SimRuntime.iOS-27-0", "24A434"),
+    "27.1": ("com.apple.CoreSimulator.SimRuntime.iOS-27-1", "24A94232"),
 }
-SCENES = ("01-today", "02-entry", "03-recent-days", "04-offline", "05-dark")
+DEVICES = {
+    "iphone-6.3": ("iPhone 18 Pro", (1206, 2622), "27.0"),
+    "ipad-13": ("iPad Pro 13-inch (M5)", (2064, 2752), "27.0"),
+    "iphone-duo-outer": ("iPhone Duo", (1398, 2034), "27.1"),
+    "iphone-duo-inner": ("iPhone Duo", (2853, 2007), "27.1"),
+}
+SCENES = (
+    "01-today",
+    "02-entry",
+    "03-recent-days",
+    "04-offline",
+    "05-dark",
+    "06-statistics",
+    "07-settings",
+    "08-empty-day",
+    "09-completed-day",
+    "10-month-forecast",
+)
 
 
 def run(*args):
@@ -42,9 +61,11 @@ def xcodebuild(log_path, *arguments):
                 "-scheme",
                 "TracyMarketing",
                 "-derivedDataPath",
-                str(IOS / "DerivedDataMarketing"),
+                str(DERIVED_DATA),
                 "-parallel-testing-enabled",
                 "NO",
+                "-collect-test-diagnostics",
+                "never",
                 "CODE_SIGNING_ALLOWED=NO",
                 *arguments,
             ],
@@ -72,7 +93,10 @@ def package_device(export, destination, dimensions):
             with Image.open(export / attachment["exportedFileName"]) as image:
                 if image.size != dimensions:
                     raise ValueError(f"{scene}: expected {dimensions}, got {image.size}")
-                image.convert("RGB").save(target)
+                rgb = image.convert("RGB")
+                if max(high for low, high in rgb.getextrema()) <= 8:
+                    raise ValueError(f"Blank or inactive display: {scene}")
+                rgb.save(target)
             found[scene] = {
                 "file": target.name,
                 "width": dimensions[0],
@@ -84,20 +108,108 @@ def package_device(export, destination, dimensions):
     return [found[scene] for scene in SCENES]
 
 
+def start_native_capture(identifier, stage):
+    """Serve native PNGs only to the local XCTest runner, synchronized per scene."""
+
+    class CaptureHandler(BaseHTTPRequestHandler):
+        def do_GET(self):
+            scene = self.path.removeprefix("/")
+            if scene in {"pose/0", "pose/90", "pose/180"}:
+                try:
+                    run(
+                        "xcrun",
+                        "simctl",
+                        "spawn",
+                        identifier,
+                        str(ROOT / "e2e-artifacts/app-store/duo-hinge"),
+                        scene.split("/")[1],
+                    )
+                    self.send_response(200)
+                    self.send_header("Content-Length", "0")
+                    self.end_headers()
+                except Exception as error:
+                    self.send_error(500, str(error))
+                return
+            pose_image = scene in {"pose-image/0", "pose-image/90", "pose-image/180"}
+            if scene not in SCENES and not pose_image:
+                self.send_error(404)
+                return
+            try:
+                path = stage / f"native-{scene.replace('/', '-')}.png"
+                display = "primary" if scene == "pose-image/0" else "primary-1"
+                run(
+                    "xcrun",
+                    "simctl",
+                    "io",
+                    identifier,
+                    "screenshot",
+                    f"--display={display}",
+                    str(path),
+                )
+                data = path.read_bytes()
+                with Image.open(path) as capture:
+                    if max(high for low, high in capture.convert("RGB").getextrema()) <= 8:
+                        raise ValueError(f"Inactive display captured for {scene}")
+                self.send_response(200)
+                self.send_header("Content-Type", "image/png")
+                self.send_header("Content-Length", str(len(data)))
+                self.end_headers()
+                self.wfile.write(data)
+            except Exception as error:
+                self.send_error(500, str(error))
+
+        def log_message(self, *_args):
+            pass
+
+    server = HTTPServer(("127.0.0.1", 0), CaptureHandler)
+    bundle = (
+        DERIVED_DATA
+        / "Build/Products/Debug-iphonesimulator"
+        / "TracyMarketingTests-Runner.app/PlugIns/TracyMarketingTests.xctest"
+    )
+    (bundle / "capture-port.txt").write_text(str(server.server_port))
+    threading.Thread(target=server.serve_forever, daemon=True).start()
+    return server
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--version", required=True)
+    parser.add_argument(
+        "--device",
+        choices=DEVICES,
+        action="append",
+        help="Capture selected device families; defaults to all",
+    )
     args = parser.parse_args()
-    if run("xcodebuild", "-version") != "Xcode 27.0\nBuild version 27A266a":
-        raise SystemExit("Screenshot captures require Xcode 27.0 build 27A266a")
+    if run("xcodebuild", "-version") != "Xcode 27.1\nBuild version 27A9275":
+        raise SystemExit("Screenshot captures require Xcode 27.1 build 27A9275")
     runtimes = json.loads(run("xcrun", "simctl", "list", "runtimes", "--json"))["runtimes"]
-    if not any(
-        r["identifier"] == RUNTIME and r["buildversion"] == "23C52" and r["isAvailable"]
-        for r in runtimes
-    ):
-        raise SystemExit("Screenshot captures require iOS 26.2 build 23C52")
+    for version in {DEVICES[name][2] for name in (args.device or DEVICES)}:
+        identifier, build = RUNTIMES[version]
+        if not any(
+            r["identifier"] == identifier and r["buildversion"] == build and r["isAvailable"]
+            for r in runtimes
+        ):
+            raise SystemExit(f"Screenshot captures require iOS {version} build {build}")
     output = ROOT / "e2e-artifacts/app-store"
     output.mkdir(parents=True, exist_ok=True)
+    hinge = output / "duo-hinge"
+    if any("duo" in name for name in (args.device or DEVICES)):
+        run(
+            "xcrun",
+            "--sdk",
+            "iphonesimulator",
+            "clang",
+            "-target",
+            "arm64-apple-ios27.1-simulator",
+            "-fobjc-arc",
+            "-framework",
+            "Foundation",
+            str(ROOT / "scripts/duo_hinge.m"),
+            "-o",
+            str(hinge),
+        )
     # Compile before booting CoreSimulator, as in the regular native CI job.
     # This avoids concurrent compiler and simulator startup on the smaller CI host.
     print("Building screenshot runner", flush=True)
@@ -111,18 +223,22 @@ def main():
         "version": args.version,
         "commit": run("git", "rev-parse", "HEAD"),
         "locale": "en-US",
-        "xcode": "27.0 (27A266a)",
-        "runtime": "iOS 26.2 (23C52)",
+        "xcode": "27.1 (27A9275)",
+        "runtimes": RUNTIMES,
         "content": "Synthetic local UI-test data; real app screens, no live account",
         "devices": {},
     }
     with tempfile.TemporaryDirectory(dir=output, delete=False) as temporary:
         stage = Path(temporary)
         package = stage / "screenshots"
-        for family, (device, dimensions) in DEVICES.items():
+        for family in args.device or DEVICES:
+            device, dimensions, version = DEVICES[family]
             print(f"Capturing {family}: {device}", flush=True)
-            identifier = run("xcrun", "simctl", "create", "Tracy marketing", device, RUNTIME)
+            identifier = run(
+                "xcrun", "simctl", "create", "Tracy marketing", device, RUNTIMES[version][0]
+            )
             result = stage / f"{family}.xcresult"
+            capture_server = None
             try:
                 devices = json.loads(run("xcrun", "simctl", "list", "devices", "--json"))
                 simulator = next(
@@ -141,6 +257,15 @@ def main():
                 run("xcrun", "simctl", "boot", identifier)
                 run("xcrun", "simctl", "bootstatus", identifier, "-b")
                 run("xcrun", "simctl", "ui", identifier, "appearance", "light")
+                if "duo" in family:
+                    run(
+                        "xcrun",
+                        "simctl",
+                        "spawn",
+                        identifier,
+                        str(hinge),
+                        "180" if family.endswith("inner") else "0",
+                    )
                 run(
                     "xcrun",
                     "simctl",
@@ -148,8 +273,8 @@ def main():
                     identifier,
                     "override",
                     "--time",
-                    # simctl rejects ISO timestamps without fractional seconds.
-                    "2026-09-30T09:41:00.000+00:00",
+                    # A literal clock stays stable across host time zones.
+                    "09:41",
                     "--dataNetwork",
                     "wifi",
                     "--wifiMode",
@@ -161,12 +286,16 @@ def main():
                     "--batteryLevel",
                     "100",
                 )
+                if family.endswith("inner"):
+                    capture_server = start_native_capture(identifier, stage)
                 xcodebuild(
                     output / f"{family}-build.log",
                     "-destination",
                     f"platform=iOS Simulator,id={identifier}",
                     "-resultBundlePath",
                     str(result),
+                    "-only-testing:TracyMarketingTests/MarketingScreenshots/"
+                    + ("testCaptureDuoInner" if family.endswith("inner") else "testCapture"),
                     "test-without-building",
                 )
                 export = stage / f"{family}-attachments"
@@ -183,10 +312,24 @@ def main():
                 manifest["devices"][family] = package_device(
                     export, package / "en-US" / family, dimensions
                 )
+                if family.endswith("inner"):
+                    evidence = package / "review/duo-transitions"
+                    evidence.mkdir(parents=True)
+                    for test in json.loads((export / "manifest.json").read_text()):
+                        for attachment in test["attachments"]:
+                            name = attachment["suggestedHumanReadableName"]
+                            if name.startswith("Duo-editor-pose-"):
+                                shutil.copyfile(
+                                    export / attachment["exportedFileName"], evidence / name
+                                )
             finally:
+                if capture_server:
+                    capture_server.shutdown()
+                    capture_server.server_close()
                 run("xcrun", "simctl", "delete", identifier)
         (package / "manifest.json").write_text(json.dumps(manifest, indent=2) + "\n")
-        archive = output / f"tracy-app-store-{args.version}.zip"
+        suffix = "-" + "-".join(args.device) if args.device else ""
+        archive = output / f"tracy-app-store-{args.version}{suffix}.zip"
         with zipfile.ZipFile(archive, "w", zipfile.ZIP_DEFLATED) as bundle:
             for path in sorted(package.rglob("*")):
                 if path.is_file():

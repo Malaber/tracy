@@ -9,6 +9,75 @@ final class TracyUITests: XCTestCase {
     }
 
     @MainActor
+    private func reveal(_ element: XCUIElement, in app: XCUIApplication) -> Bool {
+        if element.waitForExistence(timeout: 3) && element.isHittable { return true }
+        // Enumerate existing lists once instead of resolving firstMatch for a
+        // split-column identifier absent on compact Duo. Missing firstMatch
+        // queries have stalled XCTest's AX service for minutes on CI.
+        let lists = app.collectionViews.allElementsBoundByIndex
+        let surfaces = lists.isEmpty ? [app] : lists
+        for surface in surfaces {
+            for _ in 0..<8 {
+                if element.exists && element.isHittable { return true }
+                surface.swipeUp()
+            }
+            for _ in 0..<8 {
+                if element.exists && element.isHittable { return true }
+                surface.swipeDown()
+            }
+        }
+        return element.exists && element.isHittable
+    }
+
+    @MainActor
+    func testEmptyDayHierarchy() {
+        let app = XCUIApplication()
+        app.launchArguments = testArguments + ["--ui-empty-day"]
+        app.launch()
+        defer { app.terminate() }
+        XCTAssertTrue(self.reveal(app.staticTexts["No entries yet"], in: app))
+        XCTAssertTrue(self.reveal(app.buttons["quickAction"], in: app))
+        XCTAssertEqual(app.buttons["quickAction"].label, "Check in now")
+        XCTAssertFalse(app.buttons["undoCheckout"].exists)
+    }
+
+    @MainActor
+    func testCompletedDayHierarchy() {
+        let app = XCUIApplication()
+        app.launchArguments = testArguments + ["--ui-completed-day"]
+        app.launch()
+        defer { app.terminate() }
+        XCTAssertTrue(app.staticTexts["workingStatus"].waitForExistence(timeout: 15))
+        XCTAssertTrue(app.staticTexts["heroBreaks"].label.contains("0h 30m"))
+        XCTAssertTrue(self.reveal(app.staticTexts["Goal exceeded by 1h 0m"], in: app))
+        for _ in 0..<5 {
+            if app.buttons["undoCheckout"].isHittable { break }
+            app.swipeUp()
+        }
+        XCTAssertTrue(app.buttons["undoCheckout"].isHittable)
+        XCTAssertEqual(app.buttons["quickAction"].label, "Check in again")
+    }
+
+    @MainActor
+    func testMonthForecastAppearsOnlyForMonth() {
+        let app = XCUIApplication()
+        app.launchArguments = testArguments
+        app.launch()
+        defer { app.terminate() }
+        XCTAssertTrue(app.buttons["Statistics"].firstMatch.waitForExistence(timeout: 15))
+        app.buttons["Statistics"].firstMatch.tap()
+        app.buttons["Month"].tap()
+        let forecast = app.staticTexts["monthForecastTotal"]
+        XCTAssertTrue(self.reveal(forecast, in: app))
+        XCTAssertTrue(app.staticTexts["Projected balance"].exists)
+    }
+
+    @MainActor
+    func testTodayLargeTextLayout() {
+        verifyTodayLayout(appearance: "dark", largeText: true)
+    }
+
+    @MainActor
     func testTodayLightContrast() throws {
         try auditToday(appearance: "light", category: .contrast, name: "Contrast")
     }
@@ -36,6 +105,18 @@ final class TracyUITests: XCTestCase {
     @MainActor
     func testTodayDarkContrast() throws {
         try auditToday(appearance: "dark", category: .contrast, name: "Contrast")
+    }
+
+    @MainActor
+    func testContrastAuditRejectsVisibleLowContrast() throws {
+        let options = XCTExpectedFailure.Options()
+        options.issueMatcher = { issue in
+            issue.compactDescription.contains("Visible contrast failure")
+                && issue.compactDescription.contains("Deliberately low contrast")
+        }
+        try XCTExpectFailure("Visible low-contrast text must still fail the viewport audit", options: options) {
+            try auditToday(appearance: "light", category: .contrast, name: "NegativeControl", negativeControl: true)
+        }
     }
 
     @MainActor
@@ -81,14 +162,15 @@ final class TracyUITests: XCTestCase {
     }
 
     @MainActor
-    private func verifyTodayLayout(appearance: String) {
+    private func verifyTodayLayout(appearance: String, largeText: Bool = false) {
         let app = XCUIApplication()
         app.launchArguments = testArguments + ["--ui-layout-checks", "-appearance", appearance]
+        if largeText { app.launchArguments += ["-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryAccessibilityXXXL"] }
         app.launch()
         defer { app.terminate() }
         for key in [
-            "date", "headline", "action", "section", "label.Check-in", "value.Check-in",
-            "label.Check-out", "value.Check-out", "breaks", "billable", "edit", "review",
+            "date", "billable", "headline", "breaks", "action", "section", "label.Check-in", "value.Check-in",
+            "label.Check-out", "value.Check-out", "edit", "review",
         ] {
             // Buttons retain their existing identifiers and inherit their label value.
             let identifier = key == "action" ? "quickAction" : key == "edit" ? "editToday"
@@ -111,13 +193,14 @@ final class TracyUITests: XCTestCase {
     }
 
     @MainActor
-    private func auditToday(appearance: String, category: XCUIAccessibilityAuditType, name: String) throws {
+    private func auditToday(appearance: String, category: XCUIAccessibilityAuditType, name: String, negativeControl: Bool = false) throws {
         let app = XCUIApplication()
         // Launch directly in the audited appearance, without a live scheme transition.
         app.launchArguments = testArguments + ["-appearance", appearance]
+        if negativeControl { app.launchArguments.append("--ui-contrast-negative-control") }
         app.launch()
         defer { app.terminate() }
-        XCTAssertTrue(app.buttons["editToday"].waitForExistence(timeout: 15))
+        XCTAssertTrue(app.staticTexts["heroBillable"].waitForExistence(timeout: 15))
         // Application screenshots resolve an accessibility snapshot. After an audit the
         // hosted iPad service can stop answering those queries. Screen capture does not
         // query the app hierarchy; collect evidence before handing control to the audit.
@@ -125,14 +208,131 @@ final class TracyUITests: XCTestCase {
         screenshot.name = "Today-\(appearance)-\(name)"
         screenshot.lifetime = .keepAlways
         add(screenshot)
-        // One category per fresh launch reduces work under the service's fixed
-        // timeout and identifies the failing category without retries.
-        try app.performAccessibilityAudit(for: category) { issue in
-            // Do not resolve issue.element: that performs another accessibility query
-            // while the audit service is handling a finding.
-            print("Accessibility audit: \(issue.detailedDescription)")
-            return false
+        if category == .contrast {
+            try auditVisibleContrast(app)
+        } else {
+            try app.performAccessibilityAudit(for: category) { issue in
+                print("Accessibility audit: \(issue.detailedDescription)")
+                return false
+            }
         }
+    }
+
+    @MainActor
+    private func auditVisibleContrast(_ app: XCUIApplication) throws {
+        // Apple's contrast audit also samples text underneath floating system bars.
+        // Defer only occluded findings; each must pass again fully onscreen. Visible
+        // failures fail immediately. Never query the hierarchy inside the callback.
+        var verified = Set<String>()
+        var pending = Set<String>()
+        var gestures: [(String, Bool)] = []
+        func key(_ element: XCUIElement) -> String {
+            // Repeated values elsewhere on the page must not validate one another.
+            "\(element.elementType.rawValue)|\(element.identifier)|\(element.label)|\(Int(element.frame.minX.rounded()))|\(Int(element.frame.width.rounded()))"
+        }
+        func unobscured(_ element: XCUIElement, bars: [CGRect]) -> Bool {
+            let frame = element.frame
+            return !frame.isEmpty && app.frame.contains(frame)
+                && !bars.contains { $0.intersects(frame) }
+        }
+        for viewport in 0..<12 {
+            var findings: [XCUIAccessibilityAuditIssue] = []
+            try app.performAccessibilityAudit(for: .contrast) { issue in
+                findings.append(issue)
+                return true // Process every finding below, outside the audit service callback.
+            }
+            let bounds = app.frame
+            let topBars = app.navigationBars.allElementsBoundByIndex.filter { $0.exists }.map { element in
+                var frame = element.frame
+                // UIKit reports the split detail bar across the entire iPad window.
+                // Constrain it to the content column it actually decorates.
+                let columnID = element.identifier == "Day details" ? "todayDetails"
+                    : element.identifier == "Today" ? "todaySummary" : ""
+                if !columnID.isEmpty {
+                    let column = app.descendants(matching: .any).matching(identifier: columnID).firstMatch
+                    if column.exists {
+                        frame.origin.x = column.frame.minX
+                        frame.size.width = column.frame.width
+                    }
+                    if columnID == "todayDetails" {
+                        let sidebar = app.descendants(matching: .any).matching(identifier: "todaySummary").firstMatch
+                        if sidebar.exists && sidebar.frame.width < bounds.width * 0.8 {
+                            // In portrait iPad the sidebar overlays the full-width
+                            // detail navigation stack, including its reported bar.
+                            let visibleMinX = max(frame.minX, sidebar.frame.maxX)
+                            frame = CGRect(x: visibleMinX, y: frame.minY,
+                                           width: max(0, frame.maxX - visibleMinX), height: frame.height)
+                        }
+                    }
+                }
+                return frame.width > frame.height
+                    ? CGRect(x: frame.minX, y: bounds.minY, width: frame.width, height: frame.maxY - bounds.minY)
+                    : frame
+            }
+            let bottomBars = app.tabBars.allElementsBoundByIndex.filter { $0.exists }.map { element in
+                let frame = element.frame
+                guard frame.width > frame.height else { return frame }
+                // iPad places its horizontal tab bar at the top; Duo can use a
+                // vertical bar. Only extend toward the nearest screen edge.
+                return frame.midY < bounds.midY
+                    ? CGRect(x: frame.minX, y: bounds.minY, width: frame.width, height: frame.maxY - bounds.minY)
+                    : CGRect(x: frame.minX, y: frame.minY, width: frame.width, height: bounds.maxY - frame.minY)
+            }
+            let bars = topBars + bottomBars
+            print("Contrast viewport bounds: \(bounds); navigation: \(topBars); tabs: \(bottomBars)")
+            var failing = Set<String>()
+            for issue in findings {
+                guard let element = issue.element, element.exists else {
+                    XCTFail("Unresolved contrast finding: \(issue.detailedDescription)")
+                    return
+                }
+                let identity = key(element)
+                print("Contrast finding: \(identity); frame: \(element.frame)")
+                failing.insert(identity)
+                if unobscured(element, bars: bars) {
+                    XCTFail("Visible contrast failure for \(identity): \(issue.detailedDescription)")
+                    return
+                }
+                pending.insert(identity)
+            }
+            // The audit can identify a containing button instead of its text label.
+            // Resolve and verify the same element type; a child label cannot clear it.
+            let candidates = app.staticTexts.allElementsBoundByIndex + app.buttons.allElementsBoundByIndex
+            for element in candidates where unobscured(element, bars: bars) {
+                let identity = key(element)
+                if !failing.contains(identity) { verified.insert(identity) }
+            }
+            pending.subtract(verified)
+            if pending.isEmpty { return }
+            let identity = pending.sorted()[0]
+            guard let target = candidates.first(where: { key($0) == identity }) else {
+                XCTFail("Cannot reveal deferred contrast finding: \(identity)")
+                return
+            }
+            let details = app.descendants(matching: .any).matching(identifier: "todayDetails").firstMatch
+            let summary = app.descendants(matching: .any).matching(identifier: "todaySummary").firstMatch
+            let surfaceID = details.exists && details.frame.intersects(target.frame) ? "todayDetails"
+                : summary.exists ? "todaySummary" : ""
+            gestures.append((surfaceID, target.frame.midY > app.frame.midY))
+            // A second audit in one automation session can time out in Apple's
+            // service. Recreate the same deterministic fixture and replay scrolling.
+            app.terminate()
+            app.launch()
+            XCTAssertTrue(app.staticTexts["heroBillable"].waitForExistence(timeout: 15))
+            for (identifier, upward) in gestures {
+                let surface = identifier.isEmpty ? app
+                    : app.descendants(matching: .any).matching(identifier: identifier).firstMatch
+                let start = surface.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.65))
+                let end = surface.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.35))
+                if upward { start.press(forDuration: 0.05, thenDragTo: end) }
+                else { end.press(forDuration: 0.05, thenDragTo: start) }
+            }
+            let evidence = XCTAttachment(screenshot: XCUIScreen.main.screenshot())
+            evidence.name = "Contrast-revealed-viewport-\(viewport)"
+            evidence.lifetime = .keepAlways
+            add(evidence)
+        }
+        XCTFail("Contrast findings never verified fully onscreen: \(pending.sorted())")
     }
 
     @MainActor
@@ -141,7 +341,7 @@ final class TracyUITests: XCTestCase {
         app.launchArguments = testArguments
         app.launchEnvironment["TRACY_UI_JOURNAL"] = UUID().uuidString
         app.launch()
-        XCTAssertTrue(app.buttons["editToday"].waitForExistence(timeout: 10))
+        XCTAssertTrue(self.reveal(app.buttons["editToday"], in: app))
         app.buttons["editToday"].tap()
         let form = app.descendants(matching: .any).matching(identifier: "entryForm").firstMatch
         XCTAssertTrue(form.waitForExistence(timeout: 15))
@@ -160,20 +360,20 @@ final class TracyUITests: XCTestCase {
         notes.tap()
         notes.typeText("Offline project notes")
         app.buttons["saveEntry"].tap()
-        XCTAssertTrue(app.staticTexts["Offline project notes"].waitForExistence(timeout: 3))
+        XCTAssertTrue(self.reveal(app.staticTexts["Offline project notes"], in: app))
         for _ in 0..<6 {
-            if app.staticTexts["1 days waiting to sync"].exists { break }
+            if app.staticTexts["1 day waiting to sync"].exists { break }
             app.swipeUp()
         }
-        XCTAssertTrue(app.staticTexts["1 days waiting to sync"].exists)
+        XCTAssertTrue(app.staticTexts["1 day waiting to sync"].exists)
         app.terminate()
         app.launch()
-        XCTAssertTrue(app.staticTexts["Offline project notes"].waitForExistence(timeout: 10))
+        XCTAssertTrue(self.reveal(app.staticTexts["Offline project notes"], in: app))
         for _ in 0..<6 {
-            if app.staticTexts["1 days waiting to sync"].exists { break }
+            if app.staticTexts["1 day waiting to sync"].exists { break }
             app.swipeUp()
         }
-        XCTAssertTrue(app.staticTexts["1 days waiting to sync"].exists)
+        XCTAssertTrue(app.staticTexts["1 day waiting to sync"].exists)
         app.buttons["Recent Days"].firstMatch.tap()
         XCTAssertTrue(app.switches["Needs attention only"].waitForExistence(timeout: 3))
     }
@@ -188,14 +388,14 @@ final class TracyUITests: XCTestCase {
         XCTAssertTrue(app.staticTexts["heroBillable"].waitForExistence(timeout: 15))
         XCTAssertTrue(app.staticTexts["heroBreaks"].label.contains("breaks deducted"))
         app.buttons["quickAction"].tap()
-        XCTAssertTrue(app.buttons["quickAction"].waitForExistence(timeout: 10))
-        XCTAssertEqual(app.buttons["quickAction"].label, "Check in now")
+        XCTAssertTrue(self.reveal(app.buttons["quickAction"], in: app))
+        XCTAssertEqual(app.buttons["quickAction"].label, "Check in again")
         app.buttons["sessionActionOptions"].tap()
         XCTAssertTrue(app.buttons["saveSessionAction"].waitForExistence(timeout: 10))
         app.buttons["Cancel"].tap()
-        XCTAssertTrue(app.buttons["undoCheckout"].waitForExistence(timeout: 10))
+        XCTAssertTrue(self.reveal(app.buttons["undoCheckout"], in: app))
         app.buttons["undoCheckout"].tap()
-        XCTAssertTrue(app.buttons["quickAction"].waitForExistence(timeout: 10))
+        XCTAssertTrue(self.reveal(app.buttons["quickAction"], in: app))
         XCTAssertTrue(app.staticTexts["heroBillable"].exists)
     }
 
@@ -206,11 +406,24 @@ final class TracyUITests: XCTestCase {
         app.launchEnvironment["TRACY_UI_JOURNAL"] = UUID().uuidString
         app.launch()
         defer { app.terminate() }
-        XCTAssertTrue(app.buttons["quickAction"].waitForExistence(timeout: 15))
+        func relaunchPersistedEntry() {
+            // Finish the sheet transition before ending the process. Backgrounding
+            // lets SpringBoard detach its accessibility session before termination.
+            XCTAssertTrue(app.buttons["saveEntry"].waitForNonExistence(timeout: 10))
+            let home = XCUIApplication(bundleIdentifier: "com.apple.springboard")
+            home.activate()
+            XCTAssertTrue(home.wait(for: .runningForeground, timeout: 10))
+            app.terminate()
+            XCTAssertTrue(app.wait(for: .notRunning, timeout: 10))
+            app.launch()
+            XCTAssertTrue(app.staticTexts["heroBillable"].waitForExistence(timeout: 15))
+        }
+        XCTAssertTrue(app.staticTexts["heroBillable"].waitForExistence(timeout: 15))
+        XCTAssertTrue(self.reveal(app.buttons["quickAction"], in: app))
         app.buttons["quickAction"].tap()
-        XCTAssertTrue(app.buttons["editToday"].waitForExistence(timeout: 10))
+        XCTAssertTrue(self.reveal(app.buttons["editToday"], in: app))
         app.buttons["editToday"].tap()
-        let form = app.descendants(matching: .any).matching(identifier: "entryForm").firstMatch
+        let form = app.collectionViews.matching(NSPredicate(format: "identifier == %@", "entryForm")).firstMatch
         func reveal(_ element: XCUIElement) {
             for _ in 0..<8 {
                 if element.exists && element.isHittable { return }
@@ -223,11 +436,10 @@ final class TracyUITests: XCTestCase {
         remove.tap()
         XCTAssertTrue(remove.waitForNonExistence(timeout: 5))
         app.buttons["saveEntry"].tap()
-        XCTAssertTrue(app.staticTexts["heroBreaks"].waitForExistence(timeout: 5))
+        XCTAssertTrue(self.reveal(app.staticTexts["heroBreaks"], in: app))
         XCTAssertEqual(app.staticTexts["heroBreaks"].label, "0h 0m breaks deducted")
-        app.terminate()
-        app.launch()
-        XCTAssertTrue(app.buttons["editToday"].waitForExistence(timeout: 15))
+        relaunchPersistedEntry()
+        XCTAssertTrue(self.reveal(app.buttons["editToday"], in: app))
         app.buttons["editToday"].tap()
         let add = app.buttons["Add break"]
         reveal(add)
@@ -236,9 +448,24 @@ final class TracyUITests: XCTestCase {
         reveal(add)
         add.tap()
         reveal(app.buttons["removeBreak2"])
-        app.buttons["removeBreak2"].swipeLeft()
-        app.buttons["Delete"].tap()
-        XCTAssertTrue(app.buttons["removeBreak2"].waitForNonExistence(timeout: 5))
+        let secondBreak = app.buttons["removeBreak2"]
+        let secondRow = form.cells.containing(.button, identifier: "removeBreak2").firstMatch
+        // The nested Remove button is narrow. Swiping it can trigger auto-scroll
+        // and hit the picker instead. Drag across the row's empty trailing area,
+        // level with Remove, without crossing the picker or stepper.
+        let y = (secondBreak.frame.midY - secondRow.frame.minY) / secondRow.frame.height
+        let start = secondRow.coordinate(withNormalizedOffset: CGVector(dx: 0.9, dy: y))
+        let end = secondRow.coordinate(withNormalizedOffset: CGVector(dx: 0.35, dy: y))
+        XCTAssertTrue(form.frame.contains(start.screenPoint))
+        XCTAssertTrue(form.frame.contains(end.screenPoint))
+        start.press(forDuration: 0.05, thenDragTo: end)
+        // A native full swipe may commit immediately; otherwise confirm Delete.
+        if !secondBreak.waitForNonExistence(timeout: 3) {
+            let delete = app.buttons["Delete"]
+            XCTAssertTrue(delete.waitForExistence(timeout: 5))
+            delete.tap()
+        }
+        XCTAssertTrue(secondBreak.waitForNonExistence(timeout: 5))
         let duration = app.steppers["breakDuration1"]
         reveal(duration)
         XCTAssertEqual(duration.value as? String, "30 minutes")
@@ -250,11 +477,10 @@ final class TracyUITests: XCTestCase {
         app.buttons["Remove break"].tap()
         XCTAssertTrue(remove.waitForNonExistence(timeout: 5))
         app.buttons["saveEntry"].tap()
-        XCTAssertTrue(app.staticTexts["heroBreaks"].waitForExistence(timeout: 5))
+        XCTAssertTrue(self.reveal(app.staticTexts["heroBreaks"], in: app))
         XCTAssertEqual(app.staticTexts["heroBreaks"].label, "0h 0m breaks deducted")
-        app.terminate()
-        app.launch()
-        XCTAssertTrue(app.buttons["editToday"].waitForExistence(timeout: 15))
+        relaunchPersistedEntry()
+        XCTAssertTrue(self.reveal(app.buttons["editToday"], in: app))
         app.buttons["editToday"].tap()
         reveal(add)
         XCTAssertTrue(remove.waitForNonExistence(timeout: 5))
@@ -267,7 +493,7 @@ final class TracyUITests: XCTestCase {
         app.launchEnvironment["TRACY_UI_JOURNAL"] = UUID().uuidString
         app.launch()
         defer { app.terminate() }
-        XCTAssertTrue(app.buttons["editToday"].waitForExistence(timeout: 15))
+        XCTAssertTrue(self.reveal(app.buttons["editToday"], in: app))
         app.buttons["editToday"].tap()
         let form = app.descendants(matching: .any).matching(identifier: "entryForm").firstMatch
         let add = app.buttons["addProjectBooking"]
@@ -281,7 +507,7 @@ final class TracyUITests: XCTestCase {
         app.buttons["saveEntry"].tap()
         app.terminate()
         app.launch()
-        XCTAssertTrue(app.buttons["editToday"].waitForExistence(timeout: 15))
+        XCTAssertTrue(self.reveal(app.buttons["editToday"], in: app))
         app.buttons["editToday"].tap()
         for _ in 0..<8 {
             if app.textFields["Booking minutes"].exists && app.textFields["Booking minutes"].isHittable { break }
@@ -311,7 +537,7 @@ final class TracyUITests: XCTestCase {
         app.buttons["manageVacation"].tap()
         XCTAssertTrue(app.buttons["saveVacation"].waitForExistence(timeout: 10))
         app.buttons["saveVacation"].tap()
-        XCTAssertTrue(app.buttons["editToday"].waitForExistence(timeout: 10))
+        XCTAssertTrue(self.reveal(app.buttons["editToday"], in: app))
         app.buttons["editToday"].tap()
         XCTAssertTrue(app.buttons["entryVacation"].waitForExistence(timeout: 10))
         XCTAssertEqual(app.buttons["entryVacation"].label, "Manage vacation")
@@ -330,7 +556,7 @@ final class TracyUITests: XCTestCase {
         XCTAssertTrue(app.buttons["applyActualCheckout"].waitForExistence(timeout: 15))
         app.buttons["applyActualCheckout"].tap()
         app.buttons["saveEntry"].tap()
-        XCTAssertTrue(app.buttons["undoCheckout"].waitForExistence(timeout: 10))
+        XCTAssertTrue(self.reveal(app.buttons["undoCheckout"], in: app))
     }
 
     @MainActor
@@ -340,15 +566,16 @@ final class TracyUITests: XCTestCase {
         app.launchEnvironment["TRACY_UI_JOURNAL"] = UUID().uuidString
         app.launch()
         defer { app.terminate() }
-        XCTAssertTrue(app.buttons["sessionActionOptions"].waitForExistence(timeout: 15))
+        XCTAssertTrue(self.reveal(app.buttons["sessionActionOptions"], in: app))
         app.buttons["sessionActionOptions"].tap()
         XCTAssertTrue(app.buttons["saveSessionAction"].waitForExistence(timeout: 10))
         app.buttons["sessionProject"].tap()
         app.buttons["Project Y"].tap()
         app.buttons["saveSessionAction"].tap()
-        XCTAssertTrue(app.buttons["editToday"].waitForExistence(timeout: 10))
+        XCTAssertTrue(self.reveal(app.buttons["quickAction"], in: app))
         XCTAssertEqual(app.buttons["quickAction"].label, "Check out now")
-        XCTAssertTrue(app.staticTexts["Project Y"].firstMatch.exists)
+        XCTAssertTrue(self.reveal(app.staticTexts["Project Y"].firstMatch, in: app))
+        XCTAssertTrue(self.reveal(app.buttons["editToday"], in: app))
         app.buttons["editToday"].tap()
         XCTAssertTrue(app.staticTexts["Session 1"].waitForExistence(timeout: 10))
         XCTAssertTrue(app.buttons["saveEntry"].exists)
@@ -361,7 +588,7 @@ final class TracyUITests: XCTestCase {
         remove.tap()
         XCTAssertTrue(app.staticTexts["Session 1"].waitForNonExistence(timeout: 5))
         app.buttons["saveEntry"].tap()
-        XCTAssertTrue(app.buttons["quickAction"].waitForExistence(timeout: 10))
+        XCTAssertTrue(self.reveal(app.buttons["quickAction"], in: app))
         XCTAssertEqual(app.buttons["quickAction"].label, "Check in now")
     }
 
