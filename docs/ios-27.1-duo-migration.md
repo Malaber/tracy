@@ -186,3 +186,11 @@ For forecast rows, use their typed static-text identifier instead of a whole-tre
 query for an offscreen element. For native swipe actions, gesture across the row's
 empty trailing area, away from nested pickers and steppers. A full swipe can delete
 immediately; a partial swipe requires Delete. Assert the row is gone in either case.
+
+Native tab accessibility containers differ across iPhone, iPad and Duo; do not
+assume every tab is under `TabBar` (Duo vertical tabs appear under `Toolbar`).
+For screenshot navigation, resolve an exact-label button query with
+`allElementsBoundByIndex`, select the first visible result, then verify destination
+content before capturing. iPad can expose multiple hittable matches for a tab;
+do not require uniqueness. Avoid `.firstMatch`: a Duo CI spindump showed XCTest's
+lazy first-matching-snapshot traversal stalling after scrolling Statistics.

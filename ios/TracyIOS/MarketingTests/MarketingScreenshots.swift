@@ -13,6 +13,20 @@ final class MarketingScreenshots: XCTestCase {
         // The capture task creates fresh portrait simulators. Avoid a device-orientation
         // RPC before launching the app: it can hang in XCTest on CI.
         let app = XCUIApplication()
+        func selectTab(_ title: String) {
+            // Native navigation has different AX containers on iPhone, iPad and
+            // Duo. Resolve a complete exact-label snapshot, not lazy firstMatch
+            // traversal (which stalled in XCT's first-matching-snapshot iterator).
+            let tabs = app.buttons.matching(NSPredicate(format: "label == %@", title))
+                .allElementsBoundByIndex.filter { $0.isHittable }
+            guard let tab = tabs.first else {
+                XCTFail("No visible navigation tab \(title)")
+                return
+            }
+            // iPad can expose multiple visible representations of the same tab.
+            // Destination assertions below verify the selected screen.
+            tab.tap()
+        }
         func scrollToday(up: Bool, summary: Bool = false) {
             let column = app.descendants(matching: .any).matching(identifier: summary ? "todaySummary" : "todayDetails").firstMatch
             let surface = column.exists ? column : app
@@ -57,7 +71,7 @@ final class MarketingScreenshots: XCTestCase {
         XCTAssertTrue(app.buttons["saveEntry"].waitForExistence(timeout: 5))
         try await capture("02-entry")
         app.buttons["Cancel"].tap()
-        app.buttons["Recent Days"].firstMatch.tap()
+        selectTab("Recent Days")
         XCTAssertTrue(app.switches["Needs attention only"].waitForExistence(timeout: 5))
         try await capture("03-recent-days")
         // Returning from Recent Days preserves Today’s scroll offset. XCTest may
@@ -84,7 +98,7 @@ final class MarketingScreenshots: XCTestCase {
         app.terminate()
         launch("dark")
         try await capture("05-dark")
-        app.buttons["Statistics"].firstMatch.tap()
+        selectTab("Statistics")
         XCTAssertTrue(app.staticTexts["statisticsBillable"].waitForExistence(timeout: 5))
         try await capture("06-statistics")
         app.buttons["Month"].tap()
@@ -96,7 +110,7 @@ final class MarketingScreenshots: XCTestCase {
         }
         XCTAssertTrue(forecast.isHittable, app.debugDescription)
         try await capture("10-month-forecast")
-        app.buttons["Settings"].firstMatch.tap()
+        selectTab("Settings")
         XCTAssertTrue(app.buttons["appearancePicker"].waitForExistence(timeout: 5))
         try await capture("07-settings")
         app.terminate()
