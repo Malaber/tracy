@@ -471,9 +471,24 @@ final class TracyUITests: XCTestCase {
         XCTAssertEqual(duration.value as? String, "30 minutes")
         for _ in 0..<30 { duration.buttons["breakDuration1-Decrement"].tap() }
         XCTAssertTrue(app.buttons["Remove break"].waitForExistence(timeout: 3))
-        app.buttons.matching(identifier: "Cancel").allElementsBoundByIndex.last!.tap()
+        let popover = app.popovers.containing(.button, identifier: "Remove break").firstMatch
+        if popover.exists {
+            // iPad confirmation dialogs dismiss outside their popover. Never
+            // choose the editor's unrelated Cancel button by global query order.
+            let outside = app.buttons["saveEntry"].coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5))
+            XCTAssertFalse(popover.frame.contains(outside.screenPoint))
+            outside.tap()
+        } else {
+            let cancel = app.sheets.containing(.button, identifier: "Remove break").buttons["Cancel"]
+            XCTAssertTrue(cancel.waitForExistence(timeout: 5))
+            cancel.tap()
+        }
+        XCTAssertTrue(app.buttons["Remove break"].waitForNonExistence(timeout: 5))
+        XCTAssertTrue(app.buttons["saveEntry"].exists)
+        reveal(duration)
         XCTAssertEqual(duration.value as? String, "1 minutes")
         duration.buttons["breakDuration1-Decrement"].tap()
+        XCTAssertTrue(app.buttons["Remove break"].waitForExistence(timeout: 5))
         app.buttons["Remove break"].tap()
         XCTAssertTrue(remove.waitForNonExistence(timeout: 5))
         app.buttons["saveEntry"].tap()

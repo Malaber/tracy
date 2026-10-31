@@ -194,3 +194,15 @@ For screenshot navigation, resolve an exact-label button query with
 content before capturing. iPad can expose multiple hittable matches for a tab;
 do not require uniqueness. Avoid `.firstMatch`: a Duo CI spindump showed XCTest's
 lazy first-matching-snapshot traversal stalling after scrolling Statistics.
+
+Separate scene transitions from final cleanup. Before relaunching a screenshot
+fixture, activate SpringBoard, wait for it to reach the foreground, terminate the
+app, and wait for `.notRunning`. Do not terminate again after the last capture:
+the capture script owns the dedicated simulator and deletes it in `finally`.
+A Duo run captured all ten images successfully but failed solely on that redundant
+final XCTest termination RPC.
+
+Scope confirmation-dialog actions to the presented sheet or popover. On iPad,
+cancel by dismissing outside the confirmation popover and verify both dismissal
+and that the editor remains open. Never select a global `Cancel` by array position:
+it can resolve to the editor toolbar instead of the confirmation UI.

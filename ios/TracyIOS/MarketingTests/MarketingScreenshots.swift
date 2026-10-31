@@ -32,6 +32,14 @@ final class MarketingScreenshots: XCTestCase {
             let surface = column.exists ? column : app
             if up { surface.swipeUp() } else { surface.swipeDown() }
         }
+        func stopForRelaunch() {
+            // Detach foreground accessibility before ending a scene's process.
+            let home = XCUIApplication(bundleIdentifier: "com.apple.springboard")
+            home.activate()
+            XCTAssertTrue(home.wait(for: .runningForeground, timeout: 10))
+            app.terminate()
+            XCTAssertTrue(app.wait(for: .notRunning, timeout: 10))
+        }
         func launch(_ appearance: String, state: String? = nil) {
             app.launchArguments = [
                 "--ui-testing", "-AppleLanguages", "(en)", "-AppleLocale", "en_US",
@@ -78,7 +86,7 @@ final class MarketingScreenshots: XCTestCase {
         // report a button hidden behind the translucent navigation bar as hittable.
         // Start this independent scene at a known scroll position and verify the
         // checkout transition before searching for its pending-sync status.
-        app.terminate()
+        stopForRelaunch()
         launch("light")
         let checkout = app.buttons["quickAction"]
         XCTAssertEqual(checkout.label, "Check out now")
@@ -95,7 +103,7 @@ final class MarketingScreenshots: XCTestCase {
         XCTAssertTrue(syncStatus.waitForExistence(timeout: 5))
         XCTAssertEqual(syncStatus.label, "1 day waiting to sync")
         try await capture("04-offline")
-        app.terminate()
+        stopForRelaunch()
         launch("dark")
         try await capture("05-dark")
         selectTab("Statistics")
@@ -113,14 +121,16 @@ final class MarketingScreenshots: XCTestCase {
         selectTab("Settings")
         XCTAssertTrue(app.buttons["appearancePicker"].waitForExistence(timeout: 5))
         try await capture("07-settings")
-        app.terminate()
+        stopForRelaunch()
         launch("dark", state: "--ui-empty-day")
         try await capture("08-empty-day")
-        app.terminate()
+        stopForRelaunch()
         launch("dark", state: "--ui-completed-day")
         try await capture("09-completed-day")
-        app.terminate()
+        // The capture task deletes its dedicated simulator in finally. No final
+        // terminate RPC: all scenes are already captured and it can fail on Duo.
         if innerDisplay {
+            stopForRelaunch()
             launch("light")
             for _ in 0..<6 {
                 if app.buttons["editToday"].isHittable { break }
@@ -165,7 +175,6 @@ final class MarketingScreenshots: XCTestCase {
                 scrollToday(up: false, summary: true)
             }
             XCTAssertEqual(app.buttons["quickAction"].label, "Check out now")
-            app.terminate()
         }
     }
 }
