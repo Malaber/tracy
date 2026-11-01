@@ -196,8 +196,13 @@ do not require uniqueness. Avoid `.firstMatch`: a Duo CI spindump showed XCTest'
 lazy first-matching-snapshot traversal stalling after scrolling Statistics.
 
 Separate scene transitions from final cleanup. Before relaunching a screenshot
-fixture, activate SpringBoard, wait for it to reach the foreground, terminate the
-app, and wait for `.notRunning`. Do not terminate again after the last capture:
+fixture, activate SpringBoard and wait for it to reach the foreground. Request
+termination through the local capture bridge using `simctl terminate`, then verify
+`.notRunning` in XCTest before launching again. The bridge is bound to loopback,
+accepts only the fixed app on its dedicated simulator, and fails on command errors
+or a 20-second timeout. Backgrounding alone did not prevent XCTest from failing
+with a `Failed to terminate ...:0` error during scene transitions on CI; avoid
+that termination RPC. Do not terminate again after the last capture:
 the capture script owns the dedicated simulator and deletes it in `finally`.
 A Duo run captured all ten images successfully but failed solely on that redundant
 final XCTest termination RPC.

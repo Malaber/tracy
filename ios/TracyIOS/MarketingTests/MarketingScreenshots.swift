@@ -32,12 +32,22 @@ final class MarketingScreenshots: XCTestCase {
             let surface = column.exists ? column : app
             if up { surface.swipeUp() } else { surface.swipeDown() }
         }
-        func stopForRelaunch() {
+        func stopForRelaunch() async throws {
             // Detach foreground accessibility before ending a scene's process.
             let home = XCUIApplication(bundleIdentifier: "com.apple.springboard")
             home.activate()
             XCTAssertTrue(home.wait(for: .runningForeground, timeout: 10))
-            app.terminate()
+            let config = try XCTUnwrap(Bundle(for: Self.self).url(forResource: "capture-port", withExtension: "txt"))
+            let port = try String(contentsOf: config, encoding: .utf8).trimmingCharacters(in: .whitespacesAndNewlines)
+            let url = try XCTUnwrap(URL(string: "http://127.0.0.1:\(port)/terminate"))
+            var request = URLRequest(url: url, timeoutInterval: 30)
+            request.httpMethod = "POST"
+            let (_, response) = try await URLSession.shared.data(for: request)
+            let status = (response as? HTTPURLResponse)?.statusCode
+            guard status == 204 else {
+                XCTFail("Simulator termination failed: HTTP \(status ?? 0)")
+                throw URLError(.badServerResponse)
+            }
             XCTAssertTrue(app.wait(for: .notRunning, timeout: 10))
         }
         func launch(_ appearance: String, state: String? = nil) {
@@ -86,7 +96,7 @@ final class MarketingScreenshots: XCTestCase {
         // report a button hidden behind the translucent navigation bar as hittable.
         // Start this independent scene at a known scroll position and verify the
         // checkout transition before searching for its pending-sync status.
-        stopForRelaunch()
+        try await stopForRelaunch()
         launch("light")
         let checkout = app.buttons["quickAction"]
         XCTAssertEqual(checkout.label, "Check out now")
@@ -103,7 +113,7 @@ final class MarketingScreenshots: XCTestCase {
         XCTAssertTrue(syncStatus.waitForExistence(timeout: 5))
         XCTAssertEqual(syncStatus.label, "1 day waiting to sync")
         try await capture("04-offline")
-        stopForRelaunch()
+        try await stopForRelaunch()
         launch("dark")
         try await capture("05-dark")
         selectTab("Statistics")
@@ -121,16 +131,16 @@ final class MarketingScreenshots: XCTestCase {
         selectTab("Settings")
         XCTAssertTrue(app.buttons["appearancePicker"].waitForExistence(timeout: 5))
         try await capture("07-settings")
-        stopForRelaunch()
+        try await stopForRelaunch()
         launch("dark", state: "--ui-empty-day")
         try await capture("08-empty-day")
-        stopForRelaunch()
+        try await stopForRelaunch()
         launch("dark", state: "--ui-completed-day")
         try await capture("09-completed-day")
         // The capture task deletes its dedicated simulator in finally. No final
         // terminate RPC: all scenes are already captured and it can fail on Duo.
         if innerDisplay {
-            stopForRelaunch()
+            try await stopForRelaunch()
             launch("light")
             for _ in 0..<6 {
                 if app.buttons["editToday"].isHittable { break }

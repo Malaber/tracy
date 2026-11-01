@@ -109,9 +109,29 @@ def package_device(export, destination, dimensions):
 
 
 def start_native_capture(identifier, stage):
-    """Serve native PNGs only to the local XCTest runner, synchronized per scene."""
+    """Control the dedicated simulator for the local XCTest runner."""
 
     class CaptureHandler(BaseHTTPRequestHandler):
+        def do_POST(self):
+            if self.path != "/terminate":
+                self.send_error(404)
+                return
+            try:
+                # Avoid XCTest's stale-PID termination RPC on Duo. Only this
+                # capture's simulator and fixed app bundle can be terminated.
+                subprocess.run(
+                    ["xcrun", "simctl", "terminate", identifier, "de.malaber.tracy"],
+                    capture_output=True,
+                    text=True,
+                    check=True,
+                    timeout=20,
+                )
+                self.send_response(204)
+                self.send_header("Content-Length", "0")
+                self.end_headers()
+            except (subprocess.CalledProcessError, subprocess.TimeoutExpired) as error:
+                self.send_error(500, str(error))
+
         def do_GET(self):
             scene = self.path.removeprefix("/")
             if scene in {"pose/0", "pose/90", "pose/180"}:
@@ -286,8 +306,7 @@ def main():
                     "--batteryLevel",
                     "100",
                 )
-                if family.endswith("inner"):
-                    capture_server = start_native_capture(identifier, stage)
+                capture_server = start_native_capture(identifier, stage)
                 xcodebuild(
                     output / f"{family}-build.log",
                     "-destination",
