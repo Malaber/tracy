@@ -211,3 +211,28 @@ Scope confirmation-dialog actions to the presented sheet or popover. On iPad,
 cancel by dismissing outside the confirmation popover and verify both dismissal
 and that the editor remains open. Never select a global `Cancel` by array position:
 it can resolve to the editor toolbar instead of the confirmation UI.
+
+### Match CI capacity to the simulator
+
+Do not treat a pass on a 16 GiB developer Mac as evidence that a 7 GiB hosted
+runner can sustain the same capture workload. The Duo outer failure on
+`bd1b695` recorded a 3-CPU, 7 GB VM, only 1.62% shared-cache residency, and heavy
+VM-compressor activity. Tracy still existed in the stackshot while XCTest
+reported no process ID. The inner job stalled in native screenshot capture.
+These observations point to host resource pressure; they do not establish an
+application crash or prove that a longer timeout fixes it.
+
+Duo screenshot jobs use `xcode-27-xlarge` (14 GB RAM, 5 CPUs, GPU acceleration).
+Ordinary iPhone/iPad captures retain `xcode-27`. Larger runners are billed; see
+[GitHub's runner specifications](https://docs.github.com/en/actions/reference/runners/larger-runners).
+The capture script rejects Duo hosts below 12 GiB before building or booting.
+`host-resources.log` records RAM, CPUs, virtual-memory counters and memory pressure
+before capture and during cleanup; CI uploads it with the build logs. Diagnostic
+command failures must never prevent simulator cleanup. Native screenshot commands
+have a 45-second deadline, shorter than the HTTP client's 60-second deadline,
+so a stalled command produces a failure instead of leaving the bridge blocked.
+
+Keep all scene assertions, ten-image validation, native dimensions and fold-draft
+checks enabled. Do not convert failures to retries or publish partial archives.
+A local capture verifies code and artifacts; only a completed hosted run verifies
+the runner configuration. Inspect that result once it is available.

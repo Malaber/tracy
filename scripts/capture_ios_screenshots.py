@@ -42,12 +42,34 @@ SCENES = (
 )
 
 
-def run(*args):
-    result = subprocess.run(args, text=True, capture_output=True)
+def run(*args, timeout=None):
+    result = subprocess.run(args, text=True, capture_output=True, timeout=timeout)
     if result.returncode:
         print(result.stdout + result.stderr, file=sys.stderr, flush=True)
         result.check_returncode()
     return result.stdout.strip()
+
+
+def require_capture_memory(families, memory_bytes):
+    """Reject the undersized host before spending minutes booting Duo."""
+    if any("duo" in family for family in families) and memory_bytes < 12 * 1024**3:
+        raise SystemExit("Duo screenshots require at least 12 GiB RAM; use xcode-27-xlarge")
+
+
+def record_host_resources(path):
+    """Keep comparable host evidence alongside build logs, even on failed runs."""
+    with path.open("a") as log:
+        for command in (
+            ("date", "-u"),
+            ("sysctl", "hw.memsize", "hw.logicalcpu"),
+            ("vm_stat",),
+            ("memory_pressure", "-Q"),
+        ):
+            try:
+                result = subprocess.run(command, text=True, capture_output=True, timeout=10)
+                log.write(f"$ {' '.join(command)}\n{result.stdout}{result.stderr}\n")
+            except (OSError, subprocess.TimeoutExpired) as error:
+                log.write(f"Resource diagnostic failed: {error}\n")
 
 
 def xcodebuild(log_path, *arguments):
@@ -165,6 +187,7 @@ def start_native_capture(identifier, stage):
                     "screenshot",
                     f"--display={display}",
                     str(path),
+                    timeout=45,
                 )
                 data = path.read_bytes()
                 with Image.open(path) as capture:
@@ -175,6 +198,8 @@ def start_native_capture(identifier, stage):
                 self.send_header("Content-Length", str(len(data)))
                 self.end_headers()
                 self.wfile.write(data)
+            except BrokenPipeError, ConnectionResetError:
+                return  # Client disconnected; do not try to write a second response.
             except Exception as error:
                 self.send_error(500, str(error))
 
@@ -202,6 +227,11 @@ def main():
         help="Capture selected device families; defaults to all",
     )
     args = parser.parse_args()
+    output = ROOT / "e2e-artifacts/app-store"
+    output.mkdir(parents=True, exist_ok=True)
+    resource_log = output / "host-resources.log"
+    record_host_resources(resource_log)
+    require_capture_memory(args.device or DEVICES, int(run("sysctl", "-n", "hw.memsize")))
     if run("xcodebuild", "-version") != "Xcode 27.1\nBuild version 27A9275":
         raise SystemExit("Screenshot captures require Xcode 27.1 build 27A9275")
     runtimes = json.loads(run("xcrun", "simctl", "list", "runtimes", "--json"))["runtimes"]
@@ -342,6 +372,7 @@ def main():
                                     export / attachment["exportedFileName"], evidence / name
                                 )
             finally:
+                record_host_resources(resource_log)
                 if capture_server:
                     capture_server.shutdown()
                     capture_server.server_close()

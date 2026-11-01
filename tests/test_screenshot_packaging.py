@@ -122,3 +122,34 @@ def test_scene_termination_bridge_is_scoped_and_reports_failure(tmp_path, monkey
     finally:
         server.shutdown()
         server.server_close()
+
+
+@pytest.mark.parametrize(
+    "families,gib,allowed",
+    [
+        (["iphone-duo-outer"], 7, False),
+        (["iphone-duo-inner"], 7, False),
+        (["iphone-6.3", "iphone-duo-inner"], 7, False),
+        (["iphone-duo-outer"], 12, True),
+        (["iphone-duo-inner"], 14, True),
+        (["iphone-6.3", "ipad-13"], 7, True),
+    ],
+)
+def test_duo_capture_rejects_undersized_hosts(families, gib, allowed):
+    if allowed:
+        module.require_capture_memory(families, gib * 1024**3)
+    else:
+        with pytest.raises(SystemExit, match="xcode-27-xlarge"):
+            module.require_capture_memory(families, gib * 1024**3)
+
+
+def test_resource_diagnostic_timeout_does_not_prevent_cleanup(tmp_path, monkeypatch):
+    import subprocess
+
+    def timeout(command, **kwargs):
+        raise subprocess.TimeoutExpired(command, kwargs["timeout"])
+
+    monkeypatch.setattr(module.subprocess, "run", timeout)
+    path = tmp_path / "resources.log"
+    module.record_host_resources(path)
+    assert path.read_text().count("Resource diagnostic failed") == 4
