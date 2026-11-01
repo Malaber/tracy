@@ -29,3 +29,9 @@ and wakes Webhooker when its repository settings are configured.
 
 Pull request descriptions may include `Release title: <title>`. The release workflow uses that
 value for the GitHub Release title; otherwise it uses the PR or commit title.
+
+## CI cost constraint
+
+The user has a cost cap. Use standard included GitHub runners only. Never switch
+to billed larger runners or enable paid capacity without explicit user approval.
+Reduce workload/recording overhead or explain remaining limitations instead.

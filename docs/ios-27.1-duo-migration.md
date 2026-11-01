@@ -222,15 +222,22 @@ reported no process ID. The inner job stalled in native screenshot capture.
 These observations point to host resource pressure; they do not establish an
 application crash or prove that a longer timeout fixes it.
 
-Duo screenshot jobs use `xcode-27-xlarge` (14 GB RAM, 5 CPUs, GPU acceleration).
-Ordinary iPhone/iPad captures retain `xcode-27`. Larger runners are billed; see
-[GitHub's runner specifications](https://docs.github.com/en/actions/reference/runners/larger-runners).
-The capture script rejects Duo hosts below 12 GiB before building or booting.
+The project has a cost cap: use standard `xcode-27` runners for every device.
+Billed larger runners are not authorized. A larger machine is not proven necessary;
+the earlier memory-floor requirement was removed.
+
+The marketing scheme disables automatic screen capture/video recording through
+XcodeGen's `captureScreenshotsAutomatically: false` and explicitly selects
+`preferredScreenCaptureFormat: screenshots`. Tests still attach every required
+native PNG and all five fold-transition images. This removes continuous recording
+and redundant automatic attachments while retaining the deliverable and assertions.
+See [XcodeGen test-action settings](https://github.com/yonaskolb/XcodeGen/blob/master/Docs/ProjectSpec.md#test-action).
+
 `host-resources.log` records RAM, CPUs, virtual-memory counters and memory pressure
-before capture and during cleanup; CI uploads it with the build logs. Diagnostic
-command failures must never prevent simulator cleanup. Native screenshot commands
-have a 45-second deadline, shorter than the HTTP client's 60-second deadline,
-so a stalled command produces a failure instead of leaving the bridge blocked.
+before capture and during cleanup. CI uploads it with build logs. Native screenshot
+commands retain their 45-second deadline. If standard-host captures still fail,
+isolate scene groups and measure resource usage before considering any paid option;
+never change the cost policy as an automatic workaround.
 
 Keep all scene assertions, ten-image validation, native dimensions and fold-draft
 checks enabled. Do not convert failures to retries or publish partial archives.

@@ -22,8 +22,8 @@ permissions:
 
 jobs:
   screenshots:
-    # Duo renders multiple displays; standard 7 GB hosts showed memory pressure.
-    runs-on: ${{ startsWith(matrix.device, 'iphone-duo-') && 'xcode-27-xlarge' || 'xcode-27' }}
+    # Cost cap: standard runners only. Do not switch to billed larger runners.
+    runs-on: xcode-27
     timeout-minutes: 35
     strategy:
       fail-fast: false
