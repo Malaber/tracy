@@ -166,6 +166,20 @@ function projectedTotals(data) {
   return projectStatistics(data, state.todayEntry, projectEntry(state.todayEntry, serverNow(), state.preferences.rounding_minutes));
 }
 
+// Apply after the live sign-off projection so today's hours are never counted twice.
+export function monthForecast(data, today) {
+  let addedMinutes = 0;
+  let remainingDays = 0;
+  for (const day of data.days) {
+    if (day.date < today || !day.is_workday || day.status === "complete") continue;
+    const addition = Math.max(0, 480 - day.billable_minutes);
+    if (addition > 0) remainingDays++;
+    addedMinutes += addition;
+  }
+  const billableMinutes = data.summary.billable_minutes + addedMinutes;
+  return { billableMinutes, balanceMinutes: billableMinutes - data.summary.target_minutes, remainingDays };
+}
+
 export function needsDefaultBreak({ checkIn, checkOut, nextDay, breaks, saved }) {
   if (saved || breaks.length || !String(checkIn ?? "").trim() || !String(checkOut ?? "").trim()) {
     return false;
@@ -795,6 +809,16 @@ function renderStatistics(data) {
   byId("statisticsEstimate").hidden = projected === data;
   data = projected;
   const summary = data.summary;
+  byId("monthForecast").hidden = state.period !== "month";
+  if (state.period === "month") {
+    const forecast = monthForecast(data, serverNow().date);
+    byId("forecastTotal").textContent = formatDuration(forecast.billableMinutes, { decimal: true });
+    byId("forecastBalance").textContent = forecast.balanceMinutes === 0 ? "On target" :
+      `${formatDuration(Math.abs(forecast.balanceMinutes))} ${forecast.balanceMinutes > 0 ? "over" : "under"} target`;
+    byId("forecastBalance").className = forecast.balanceMinutes >= 0 ? "positive" : "negative";
+    byId("forecastAssumption").textContent = `Assumes 8h on ${forecast.remainingDays} remaining unfinished workdays, topping up today. Weekends, holidays and vacation excluded. Completed days stay unchanged.`;
+  }
+
   const start = dateFromISO(data.start);
   const end = dateFromISO(data.end);
   const dateFormat = new Intl.DateTimeFormat("en", { day: "2-digit", month: "short", year: "numeric" });

@@ -174,10 +174,10 @@ struct EntryEditor: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel") { if changed { confirmDiscard = true } else { dismiss() } }
+                    Button("Cancel", systemImage: "xmark") { if changed { confirmDiscard = true } else { dismiss() } }
                 }
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("Save") {
+                ToolbarItem(placement: .editorConfirmation) {
+                    Button("Save", systemImage: "checkmark") {
                         do {
                             try store.save(date: entry.date, payload: preparedDraft, baseRevision: entry.revision)
                             dismiss()

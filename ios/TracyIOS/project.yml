@@ -78,6 +78,10 @@ schemes:
       targets:
         Tracy: all
     test:
+      # Explicit PNG attachments already cover every scene. Avoid continuous
+      # video encoding on the standard CI host, especially both Duo displays.
+      captureScreenshotsAutomatically: false
+      preferredScreenCaptureFormat: screenshots
       targets: [TracyMarketingTests]
   Tracy:
     build:

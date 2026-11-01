@@ -28,9 +28,9 @@ struct SessionActionSheet: View {
             .navigationTitle(checkOut ? "Check out" : "Check in")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("Save") {
+                ToolbarItem(placement: .cancellationAction) { Button("Cancel", systemImage: "xmark") { dismiss() } }
+                ToolbarItem(placement: .editorConfirmation) {
+                    Button("Save", systemImage: "checkmark") {
                         let parts = Clock.calendar(timezone: store.snapshot.timezone).dateComponents([.hour, .minute], from: time)
                         let minute = parts.hour! * 60 + parts.minute! + (nextDay ? 1440 : 0)
                         if store.quickAction(checkOut: checkOut, minute: minute, projectId: projectId, useSelectedProject: true) { dismiss() }

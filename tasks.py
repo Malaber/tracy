@@ -282,6 +282,7 @@ def start(c, host="127.0.0.1", port=8000, reload=False):
 
 
 IOS_ROOT = ROOT / "ios" / "TracyIOS"
+IOS_DERIVED_DATA = ROOT / "e2e-artifacts" / "ios-derived-data"
 
 
 def _ios_release_version(tags: list[str], head_tags: list[str]) -> str:
@@ -319,19 +320,21 @@ def build_ios_simulator(c):
     c.run(
         f"xcodebuild -project {shlex.quote(str(IOS_ROOT / 'TracyApp.xcodeproj'))} "
         "-scheme Tracy -destination 'generic/platform=iOS Simulator' "
-        f"-derivedDataPath {shlex.quote(str(IOS_ROOT / 'DerivedData'))} "
+        f"-derivedDataPath {shlex.quote(str(IOS_DERIVED_DATA))} "
         "CODE_SIGNING_ALLOWED=NO build"
     )
 
 
 @task(generate_ios_project)
-def check_ios_ui(c, destination="platform=iOS Simulator,name=iPhone 18 Pro,OS=27.0"):
-    """Run native time-entry and accessibility smoke tests on an installed simulator."""
+def check_ios_ui(c, destination="platform=iOS Simulator,name=iPhone 18 Pro,OS=27.0", only=""):
+    """Run native UI tests; optionally select comma-separated XCTest identifiers."""
+    selection = " ".join(f"-only-testing:{shlex.quote(test)}" for test in only.split(",") if test)
     c.run(
         f"xcodebuild -project {shlex.quote(str(IOS_ROOT / 'TracyApp.xcodeproj'))} "
         f"-scheme Tracy -destination {shlex.quote(destination)} "
-        f"-derivedDataPath {shlex.quote(str(IOS_ROOT / 'DerivedData'))} "
-        "-parallel-testing-enabled NO CODE_SIGNING_ALLOWED=NO test"
+        f"-derivedDataPath {shlex.quote(str(IOS_DERIVED_DATA))} "
+        "-parallel-testing-enabled NO -collect-test-diagnostics never "
+        f"CODE_SIGNING_ALLOWED=NO {selection} test"
     )
 
 
@@ -357,9 +360,10 @@ def set_admin(c, email, revoke=False):
 
 
 @task(generate_ios_project)
-def capture_ios_screenshots(c):
-    """Capture and package App Store screenshots on isolated iPhone and iPad simulators."""
+def capture_ios_screenshots(c, device=""):
+    """Capture all profiles, or one device profile for an isolated CI matrix job."""
+    selection = f" --device {shlex.quote(device)}" if device else ""
     c.run(
         f"{_bin('python')} scripts/capture_ios_screenshots.py "
-        f"--version {shlex.quote(_current_ios_version())}"
+        f"--version {shlex.quote(_current_ios_version())}{selection}"
     )

@@ -77,15 +77,14 @@ on iOS 26+. Bundle ID and App Store Connect SKU: `de.malaber.tracy`.
 ### App Store screenshots
 
 Every GitHub release receives `tracy-app-store-<version>.zip` after the native
-screenshot job succeeds. Unzip it and upload the PNGs from `en-US/iphone-6.5`
-(1284 × 2778) and `en-US/ipad-13` (2064 × 2752) to the corresponding App Store
-Connect display slots. Each folder contains Today, entry editing, recent-day
-review, offline saving, and dark-mode screenshots. They show the actual app with
-synthetic local data; no production account is used. `manifest.json` records the
-release version, source commit, dimensions, and checksums.
+screenshot job succeeds. It contains real app captures with synthetic local data
+for iPhone 18 Pro, iPad Pro 13-inch, and both Duo displays. Ten scenes cover Today,
+editing, recent days, offline saving, dark mode, Statistics, Settings, empty and
+completed days, and the month-end forecast. `manifest.json` records the release
+version, source commit, runtime builds, native dimensions and checksums.
 
-To generate the same files locally with Xcode 27.0 (27A266a), XcodeGen, and the
-iOS 26.2 (23C52) simulator runtime installed:
+All new iOS development uses **Xcode 27.1 (27A9275)**. Install the pinned simulator
+runtimes from the [Duo migration guide](docs/ios-27.1-duo-migration.md), then run:
 
 ```sh
 .codex/setup.sh --ios
@@ -94,13 +93,12 @@ iOS 26.2 (23C52) simulator runtime installed:
 ```
 
 Output is under `e2e-artifacts/app-store/`. The runner builds before simulator boot,
-then captures run once on fresh portrait simulators using `test-without-building`.
-No device-rotation RPC, retries, or image resizing; packaging verifies portrait
-dimensions. The separate marketing test scheme keeps capture work out of the
-regular accessibility suite. Pull requests validate
-capture and publish downloadable workflow artifacts; releases additionally attach
-the ZIP to the exact release tag. A failed capture fails its job and publishes no
-partial screenshot archive. App Store uploads remain manual.
+then captures on isolated simulators using `test-without-building`. Duo's inner
+screen is opened using a simulator-only hinge helper and captured at native
+landscape resolution. Packaging rejects missing, failed, black or wrongly sized
+images; it never resizes them. Pull requests publish downloadable screenshot
+artifacts; releases additionally attach the ZIP to the exact release tag.
+A failed capture publishes no partial archive. App Store screenshot uploads remain manual.
 
 ### Timed project sessions
 

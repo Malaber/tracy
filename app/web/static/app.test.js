@@ -3,6 +3,7 @@ import fs from "node:fs/promises";
 import test from "node:test";
 
 import {
+  monthForecast,
   calculateDraft,
   calculateSessions,
   sessionAction,
@@ -150,7 +151,7 @@ test("tracker updates live estimates every minute without saving checkout", asyn
   let tick;
   const requests = [];
   const entry = { date: "2026-10-12", saved: true, check_in: "08:00", check_out: null, breaks: [], status: "in_progress" };
-  const stats = { summary: { exact_minutes: 0, billable_minutes: 0, target_minutes: 2400, balance_minutes: -2400, completion_percent: 0 }, days: [{ date: entry.date, is_workday: true, status: "in_progress", exact_minutes: 0, billable_minutes: 0, balance_minutes: -480 }] };
+  const stats = { start: "2026-10-01", end: "2026-10-31", weeks: [], summary: { exact_minutes: 0, billable_minutes: 0, target_minutes: 2400, balance_minutes: -2400, completion_percent: 0 }, days: [{ date: entry.date, is_workday: true, status: "in_progress", exact_minutes: 0, billable_minutes: 0, balance_minutes: -480 }] };
   try {
     globalThis.document = dom.window.document;
     globalThis.location = dom.window.location;
@@ -197,6 +198,15 @@ test("tracker updates live estimates every minute without saving checkout", asyn
     await new Promise(resolve => setImmediate(resolve));
     assert.equal(element("workDate").value, "2026-10-12");
     assert.equal(element("goToToday").hidden, true);
+    document.querySelector('[data-period="month"]').click();
+    await new Promise(resolve => setImmediate(resolve));
+    assert.equal(element("monthForecast").hidden, false);
+    assert.equal(element("forecastTotal").textContent, "8.00 h");
+    assert.equal(element("forecastBalance").textContent, "32 h 00 min under target");
+    document.querySelector('[data-period="year"]').click();
+    await new Promise(resolve => setImmediate(resolve));
+    assert.equal(element("monthForecast").hidden, true);
+
   } finally {
     for (const [key, value] of Object.entries(originals)) {
       if (value === undefined) delete globalThis[key]; else globalThis[key] = value;
@@ -339,4 +349,31 @@ test("session UI saves chosen project and time, renders editable sessions, and k
     for(const [key,value] of Object.entries(originals)) { if(value===undefined) delete globalThis[key]; else globalThis[key]=value; }
     dom.window.close();
   }
+});
+
+
+test("month forecast fills only remaining unfinished workdays and retains overtime", () => {
+  const day = (date, billable_minutes = 0, status = "empty", is_workday = true) =>
+    ({ date, billable_minutes, status, is_workday });
+  const data = { summary: { billable_minutes: 900, target_minutes: 2400 }, days: [
+    day("2026-10-01"), // Past missing day remains missing.
+    day("2026-10-26", 300, "in_progress"),
+    day("2026-10-27", 600, "complete"),
+    day("2026-10-28"),
+    day("2026-10-29", 0, "empty", false), // Vacation or holiday.
+    day("2026-10-31", 0, "empty", false), // Weekend.
+  ] };
+  assert.deepEqual(monthForecast(data, "2026-10-26"), {
+    billableMinutes: 1560, balanceMinutes: -840, remainingDays: 2,
+  });
+  assert.deepEqual(monthForecast(data, "2026-11-01"), {
+    billableMinutes: 900, balanceMinutes: -1500, remainingDays: 0,
+  });
+  data.days[1].billable_minutes = 540;
+  data.summary.billable_minutes = 1140;
+  assert.equal(monthForecast(data, "2026-10-26").billableMinutes, 1620);
+  data.days[1].status = "complete";
+  data.days[1].billable_minutes = 240;
+  data.summary.billable_minutes = 840;
+  assert.equal(monthForecast(data, "2026-10-26").billableMinutes, 1320);
 });

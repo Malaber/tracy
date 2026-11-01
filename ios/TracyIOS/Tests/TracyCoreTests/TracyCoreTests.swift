@@ -312,6 +312,37 @@ private actor MockServer: EntrySyncService {
     #expect(saved.projecting(estimate, date: "2025-01-01").summary.exactMinutes == 480)
 }
 
+@Test func pendingCheckoutRemainsInStatistics() throws {
+    let fixture = """
+    {"start":"2026-10-12","end":"2026-10-18",
+     "summary":{"exact_minutes":0,"billable_minutes":0,"target_minutes":480,"balance_minutes":-480,"completed_days":0},
+     "days":[{"date":"2026-10-12","weekday":"Monday","is_weekend":false,"holiday":null,"is_day_off":false,"is_workday":true,"expected_minutes":480,"exact_minutes":0,"billable_minutes":0,"balance_minutes":-480,"status":"in_progress","notes":""}]}
+    """
+    let saved = try TracyAPI.decoder.decode(Statistics.self, from: Data(fixture.utf8))
+    var entry = WorkEntry.empty(date: "2026-10-12")
+    entry.status = "complete"
+    entry.exactMinutes = 332
+    entry.billableMinutes = 345
+    let pending = saved.includingPending([entry])
+    #expect(pending.summary.billableMinutes == 345)
+    #expect(pending.summary.exactMinutes == 332)
+    #expect(pending.summary.balanceMinutes == -135)
+    #expect(pending.summary.completedDays == 1)
+    #expect(pending.monthForecast(today: entry.date).billableMinutes == 345)
+    #expect(pending.includingPending([entry]).summary.billableMinutes == 345)
+    #expect(pending.includingPending([entry]).summary.completedDays == 1)
+    entry.status = "in_progress"
+    entry.exactMinutes = nil
+    entry.billableMinutes = nil
+    let reopened = pending.includingPending([entry]).projecting(
+        SignOffEstimate(exactMinutes: 361, billableMinutes: 375, breakMinutes: 0), date: entry.date)
+    #expect(reopened.summary.billableMinutes == 375)
+    #expect(reopened.summary.completedDays == 0)
+    #expect(reopened.monthForecast(today: entry.date).billableMinutes == 480)
+    #expect(pending.includingPending([.empty(date: entry.date)]).summary.billableMinutes == 0)
+    #expect(pending.includingPending([.empty(date: "2026-10-19")]).summary.billableMinutes == 345)
+}
+
 @Test @MainActor func reopenAndRepeatedResume() throws {
     let closed = EntryPayload(checkIn: "08:00", checkOut: "13:00",
                               breaks: [.init(durationMinutes: 30)], notes: "Keep")
@@ -463,4 +494,29 @@ private actor MockServer: EntrySyncService {
     let resumed = try legacy.sessionAction(checkOut: false, minute: 1050, projectId: 1)
     #expect(resumed.sessions?.first?.breakMinutes == 0)
     #expect(resumed.exactMinutes == 540)
+}
+
+
+@Test func monthForecastRespectsCalendarAndCompletedDays() {
+    func day(_ date: String, _ minutes: Int = 0, _ status: String = "empty", _ workday: Bool = true) -> DaySummary {
+        DaySummary(date: date, weekday: "Monday", isWeekend: false, holiday: nil,
+                   isDayOff: !workday, isWorkday: workday, expectedMinutes: workday ? 480 : 0,
+                   exactMinutes: minutes, billableMinutes: minutes, balanceMinutes: minutes - 480,
+                   status: status, notes: "")
+    }
+    var statistics = Statistics(start: "2026-10-01", end: "2026-10-31",
+        summary: .init(exactMinutes: 900, billableMinutes: 900, targetMinutes: 2400, balanceMinutes: -1500, completedDays: 1),
+        days: [day("2026-10-01"), day("2026-10-26", 300, "in_progress"),
+               day("2026-10-27", 600, "complete"), day("2026-10-28"),
+               day("2026-10-29", 0, "empty", false), day("2026-10-31", 0, "empty", false)])
+    #expect(statistics.monthForecast(today: "2026-10-26") == MonthForecast(billableMinutes: 1560, balanceMinutes: -840, remainingDays: 2))
+    #expect(statistics.monthForecast(today: "2026-11-01") == MonthForecast(billableMinutes: 900, balanceMinutes: -1500, remainingDays: 0))
+    statistics.days[1] = day("2026-10-26", 540, "in_progress")
+    statistics.summary.billableMinutes = 1140
+    #expect(statistics.monthForecast(today: "2026-10-26").billableMinutes == 1620)
+    statistics.days[1] = day("2026-10-26", 240, "complete")
+    statistics.summary.billableMinutes = 840
+    #expect(statistics.monthForecast(today: "2026-10-26").billableMinutes == 1320)
+    let reopened = statistics.projecting(SignOffEstimate(exactMinutes: 300, billableMinutes: 300, breakMinutes: 0), date: "2026-10-26")
+    #expect(reopened.monthForecast(today: "2026-10-26").billableMinutes == 1560)
 }
