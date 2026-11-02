@@ -1,3 +1,4 @@
+from importlib.metadata import version
 from fastapi import APIRouter, Depends, Request
 from fastapi.responses import HTMLResponse, RedirectResponse, Response
 from fastapi.templating import Jinja2Templates
@@ -65,6 +66,7 @@ def _context(request: Request, user: User | None = None, **values: object) -> di
     return {
         "request": request,
         "app_name": settings.app_name,
+        "app_version": version("tracy"),
         "user": user,
         "t": _translate,
         **values,

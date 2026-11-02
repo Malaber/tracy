@@ -114,7 +114,7 @@ export function sessionAction(entry, action, minute, projectId) {
   }
   const last = sessions.at(-1);
   if (action === "check-out") {
-    if (!last || last.end != null) throw new Error("Check in before checking out.");
+    if (!last) throw new Error("Check in before checking out.");
     last.end = minute;
     last.project_id = projectId;
   } else {
@@ -645,7 +645,7 @@ function renderSessions(sessions) {
   byId("sessionSection").hidden = !active;
   byId("breakHeading").closest("section").hidden = active;
   byId("projectsHeading").closest("section").hidden = active;
-  for (const id of ["checkIn", "checkOut", "nextDayCheckout"]) byId(id).disabled = active;
+  for (const id of ["checkIn", "checkOut", "nextDayCheckout"]) byId(id).disabled = false;
   byId("sessionList").replaceChildren();
   for (const [index, session] of (sessions ?? []).entries()) {
     const row = document.createElement("div");
@@ -658,8 +658,15 @@ function renderSessions(sessions) {
     row.querySelector(".session-start-next").checked = session.start >= 1440;
     row.querySelector(".session-end-next").checked = session.end >= 1440;
     row.querySelector(".session-break").value = session.break_minutes ?? "";
-    row.querySelector("button").onclick = () => { row.remove(); updateLiveSummary(); };
-    row.addEventListener("input", updateLiveSummary);
+    const updateBoundaries = () => {
+      const rows = [...byId("sessionList").children];
+      byId("checkIn").value = rows[0]?.querySelector(".session-start").value || "";
+      byId("checkOut").value = rows.at(-1)?.querySelector(".session-end").value || "";
+      byId("nextDayCheckout").checked = rows.at(-1)?.querySelector(".session-end-next").checked || false;
+      updateLiveSummary();
+    };
+    row.querySelector("button").onclick = () => { row.remove(); updateBoundaries(); };
+    row.addEventListener("input", updateBoundaries);
     byId("sessionList").append(row);
   }
 }
@@ -825,8 +832,13 @@ function renderStatistics(data) {
   byId("statisticsRange").textContent = `${dateFormat.format(start)} – ${dateFormat.format(end)}`;
   byId("projectTotals").replaceChildren();
   for (const total of data.project_totals || []) {
-    const row = document.createElement("p");
-    row.textContent = `${state.projects.projects.find(item => item.id === total.project_id)?.name || "Project " + total.project_id}: ${formatDuration(total.minutes)}`;
+    const row = document.createElement("div");
+    row.className = "project-total-row";
+    const name = document.createElement("span");
+    name.textContent = state.projects.projects.find(item => item.id === total.project_id)?.name || "Project " + total.project_id;
+    const amount = document.createElement("strong");
+    amount.textContent = formatDuration(total.minutes);
+    row.append(name, amount);
     byId("projectTotals").append(row);
   }
   byId("statExact").textContent = formatDuration(summary.exact_minutes, { decimal: true });
@@ -954,7 +966,15 @@ async function initialize() {
   byId("datePickerButton").addEventListener("click", () => byId("workDate").showPicker?.());
   byId("workDate").addEventListener("change", (event) => changeDate(event.target.value));
   byId("addBreak").addEventListener("click", () => addBreakRow());
-  ["checkIn", "checkOut", "nextDayCheckout"].forEach((id) => byId(id).addEventListener("input", updateLiveSummary));
+  ["checkIn", "checkOut", "nextDayCheckout"].forEach((id) => byId(id).addEventListener("input", () => {
+    const rows = [...byId("sessionList").children];
+    if (rows.length) {
+      if (id === "checkIn") rows[0].querySelector(".session-start").value = byId(id).value;
+      else if (id === "checkOut") rows.at(-1).querySelector(".session-end").value = byId(id).value;
+      else rows.at(-1).querySelector(".session-end-next").checked = byId(id).checked;
+    }
+    updateLiveSummary();
+  }));
   byId("saveEntry").addEventListener("click", saveEntry);
   byId("checkInNow").addEventListener("click", () => timeAction("check-in"));
   byId("checkOutNow").addEventListener("click", () => timeAction("check-out"));

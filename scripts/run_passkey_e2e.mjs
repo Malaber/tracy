@@ -88,6 +88,42 @@ async function main() {
     const saved = await saveResponse;
     assert(saved.ok(), `Protected tracker save failed: ${saved.status()} ${await saved.text()}`);
 
+    log("Correcting checkout and editing session boundaries");
+    const catalogResponse = await page.request.post(new URL("/api/v1/projects", baseUrl).toString(),
+      { data: { name: "Client project" } });
+    assert(catalogResponse.ok());
+    const catalog = await catalogResponse.json();
+    const projectID = catalog.projects.find(project => project.name === "Client project").id;
+    await page.reload();
+    await page.waitForFunction(() => document.querySelector("#checkIn")?.value === "08:00");
+    await page.locator("#checkOutOptions").click();
+    await page.locator("#sessionActionTime").fill("13:15");
+    await page.locator("#sessionActionProject").selectOption(String(projectID));
+    const correctedResponse = page.waitForResponse(response =>
+      response.request().method() === "PUT" && /\/api\/v1\/entries\//.test(response.url()));
+    await page.locator("#sessionActionForm button[type=submit]").click();
+    assert((await correctedResponse).ok());
+    await page.locator("#sessionActionDialog").waitFor({ state: "hidden" });
+    await page.locator("#checkIn").fill("08:23");
+    await page.locator("#checkOut").fill("13:15");
+    const boundaryResponse = page.waitForResponse(response =>
+      response.request().method() === "PUT" && /\/api\/v1\/entries\//.test(response.url()));
+    await page.locator("#saveEntry").click();
+    const boundary = await boundaryResponse;
+    assert(boundary.ok());
+    const boundaryEntry = await boundary.json();
+    assert.equal(boundaryEntry.sessions[0].start, 503);
+    assert.equal(boundaryEntry.sessions[0].end, 795);
+    assert.match(await page.locator(".app-version").textContent(), /^Tracy \d/);
+    await page.waitForFunction(() => !document.querySelector("#saveEntry").disabled);
+    await page.evaluate(() => window.scrollTo(0, 0));
+    await page.screenshot({ path: path.join(artifactDir, "tracker-polish.png"), fullPage: true });
+    await page.locator('.primary-nav [data-view="statistics"]').click();
+    await page.locator("#statisticsView").waitFor({ state: "visible" });
+    await page.locator(".project-total-row").filter({ hasText: "Client project" }).waitFor();
+    await page.screenshot({ path: path.join(artifactDir, "statistics-polish.png"), fullPage: true });
+    await page.locator('.primary-nav [data-view="tracker"]').click();
+
     log("Marking and removing a vacation date range");
     const trackedDate = await page.locator("#workDate").inputValue();
     const followingDate = new Date(`${trackedDate}T00:00:00Z`);

@@ -337,7 +337,8 @@ test("session UI saves chosen project and time, renders editable sessions, and k
     assert.equal(el("sessionList").children.length,3);
     assert.equal(el("billableHours").textContent,"10.75");
     assert.equal(el("sessionSection").hidden,false);
-    assert.equal(el("checkIn").disabled,true);
+    assert.equal(el("checkIn").disabled,false);
+    assert.equal(el("checkOut").disabled,false);
     const deduction=el("sessionList").children[1].querySelector(".session-break");
     deduction.value="0";
     deduction.dispatchEvent(new dom.window.Event("input",{bubbles:true}));
@@ -345,6 +346,15 @@ test("session UI saves chosen project and time, renders editable sessions, and k
     el("saveEntry").click();
     await new Promise(resolve=>setImmediate(resolve));
     assert.equal(entry.sessions[1].break_minutes,0);
+    el("checkIn").value="07:45";
+    el("checkIn").dispatchEvent(new dom.window.Event("input",{bubbles:true}));
+    el("checkOut").value="20:15";
+    el("checkOut").dispatchEvent(new dom.window.Event("input",{bubbles:true}));
+    el("saveEntry").click();
+    await new Promise(resolve=>setImmediate(resolve));
+    assert.equal(entry.sessions[0].start,465);
+    assert.equal(entry.sessions.at(-1).end,1215);
+    assert.equal(entry.sessions[1].start,645);
   } finally {
     for(const [key,value] of Object.entries(originals)) { if(value===undefined) delete globalThis[key]; else globalThis[key]=value; }
     dom.window.close();
@@ -376,4 +386,14 @@ test("month forecast fills only remaining unfinished workdays and retains overti
   data.days[1].billable_minutes = 240;
   data.summary.billable_minutes = 840;
   assert.equal(monthForecast(data, "2026-10-26").billableMinutes, 1320);
+});
+
+test("checkout corrects an existing session without losing its check-in", () => {
+  const entry = {sessions: [{start: 503, end: 553, project_id: 1, break_minutes: null}]};
+  const sessions = sessionAction(entry, "check-out", 795, 1);
+  assert.equal(sessions[0].start, 503);
+  assert.equal(sessions[0].end, 795);
+  assert.equal(calculateSessions(sessions).exact, 292);
+  assert.equal(entry.sessions[0].end, 553);
+  assert.throws(() => sessionAction(entry, "check-out", 502, 1));
 });

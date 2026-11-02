@@ -30,6 +30,19 @@ final class TracyUITests: XCTestCase {
     }
 
     @MainActor
+    func testExpiredAuthenticationIsVisibleAcrossTabs() {
+        let app = XCUIApplication()
+        app.launchArguments = testArguments + ["--ui-expired-auth"]
+        app.launch()
+        defer { app.terminate() }
+        XCTAssertTrue(app.buttons["Sign in"].waitForExistence(timeout: 15))
+        XCTAssertTrue(app.staticTexts["Sign in again to sync"].exists)
+        app.tabBars.buttons["Settings"].tap()
+        XCTAssertTrue(app.buttons["Sign in"].isHittable)
+        XCTAssertTrue(self.reveal(app.buttons["Sync now"], in: app))
+    }
+
+    @MainActor
     func testEmptyDayHierarchy() {
         let app = XCUIApplication()
         app.launchArguments = testArguments + ["--ui-empty-day"]
@@ -390,6 +403,10 @@ final class TracyUITests: XCTestCase {
         app.buttons["quickAction"].tap()
         XCTAssertTrue(self.reveal(app.buttons["quickAction"], in: app))
         XCTAssertEqual(app.buttons["quickAction"].label, "Check in again")
+        let primary = app.buttons["quickAction"].frame
+        let options = app.buttons["sessionActionOptions"].frame
+        XCTAssertEqual(primary.height, options.height, accuracy: 1)
+        XCTAssertLessThanOrEqual(abs(primary.maxX - options.minX), 2)
         app.buttons["sessionActionOptions"].tap()
         XCTAssertTrue(app.buttons["saveSessionAction"].waitForExistence(timeout: 10))
         app.buttons["Cancel"].tap()
@@ -552,6 +569,9 @@ final class TracyUITests: XCTestCase {
         app.buttons["manageVacation"].tap()
         XCTAssertTrue(app.buttons["saveVacation"].waitForExistence(timeout: 10))
         app.buttons["saveVacation"].tap()
+        XCTAssertTrue(app.staticTexts["Vacation day"].waitForExistence(timeout: 10))
+        XCTAssertTrue(app.staticTexts["Daily goal paused"].exists)
+        XCTAssertFalse(app.buttons["quickAction"].exists)
         XCTAssertTrue(self.reveal(app.buttons["editToday"], in: app))
         app.buttons["editToday"].tap()
         XCTAssertTrue(app.buttons["entryVacation"].waitForExistence(timeout: 10))

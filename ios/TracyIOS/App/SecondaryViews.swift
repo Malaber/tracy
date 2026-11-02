@@ -108,7 +108,7 @@ struct SettingsView: View {
                     if let synced = store.snapshot.lastSync {
                         LabeledContent("Last connected") { Text(synced, style: .relative) }
                     }
-                    Button("Sync now") { Task { await store.refresh() } }.disabled(store.isSyncing)
+                    Button("Sync now") { Task { await store.syncNow() } }.disabled(store.isSyncing)
                     Text(
                         "Entries stay on this device until they sync. Tracy retries when connectivity returns and whenever you reopen the app."
                     )

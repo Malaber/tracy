@@ -396,18 +396,20 @@ public enum Clock {
 
     // A date-only key never passes through the device's timezone.
     public static func date(_ key: String) -> Date {
-        let formatter = DateFormatter()
-        formatter.calendar = Calendar(identifier: .gregorian)
-        formatter.locale = Locale(identifier: "en_US_POSIX")
-        formatter.timeZone = TimeZone(secondsFromGMT: 0)
-        formatter.dateFormat = "yyyy-MM-dd"
-        return formatter.date(from: key) ?? .distantPast
+        let parts = key.split(separator: "-").compactMap { Int($0) }
+        guard parts.count == 3 else { return .distantPast }
+        let calendar = calendar(timezone: "UTC")
+        let components = DateComponents(year: parts[0], month: parts[1], day: parts[2])
+        guard let date = calendar.date(from: components),
+              calendar.dateComponents([.year, .month, .day], from: date) == components else { return .distantPast }
+        return date
     }
 
     public static func title(_ key: String) -> String {
-        let formatter = DateFormatter()
-        formatter.timeZone = TimeZone(secondsFromGMT: 0)
-        formatter.setLocalizedDateFormatFromTemplate("EEE d MMM")
-        return formatter.string(from: date(key))
+        // Foundation caches FormatStyle machinery. Do not build two expensive
+        // DateFormatters for every row during SwiftUI layout and scrolling.
+        var style = Date.FormatStyle().weekday(.abbreviated).day().month(.abbreviated)
+        style.timeZone = TimeZone(secondsFromGMT: 0)!
+        return date(key).formatted(style)
     }
 }

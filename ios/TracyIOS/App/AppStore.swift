@@ -7,13 +7,15 @@ import TracyCore
 @MainActor
 final class AppStore: ObservableObject {
     @Published private(set) var credential: Credential?
-    @Published private(set) var snapshot = JournalSnapshot()
+    @Published private(set) var snapshot = JournalSnapshot() { didSet { estimateReady = false } }
     @Published private(set) var isOnline = true
     @Published private(set) var isSyncing = false
     @Published private(set) var needsSignIn = false
     @Published var error: String?
     @Published var notice: String?
-    @Published private(set) var currentDate = Date()
+    @Published private(set) var currentDate = Date() { didSet { estimateReady = false } }
+    private var estimateReady = false
+    private var cachedEstimate: SignOffEstimate?
     private var journal: OfflineJournal?
     private let monitor = NWPathMonitor()
     private let signInClient = BrowserSignIn()
@@ -62,7 +64,12 @@ final class AppStore: ObservableObject {
         self.needsSignIn = false
     }
 
+    @Published private(set) var isSigningIn = false
+
     func signIn(address: String) async {
+        guard !isSigningIn else { return }
+        isSigningIn = true
+        defer { isSigningIn = false }
         do {
             let server = try ServerAddress.parse(address)
             let credential = try await signInClient.signIn(server: server)
@@ -228,8 +235,12 @@ final class AppStore: ObservableObject {
     }
 
     var signOffEstimate: SignOffEstimate? {
-        SignOffEstimate.project(entry(today), now: currentDate, timezone: snapshot.timezone,
-                                rounding: snapshot.roundingMinutes ?? 15)
+        if !estimateReady {
+            cachedEstimate = SignOffEstimate.project(entry(today), now: currentDate, timezone: snapshot.timezone,
+                                                    rounding: snapshot.roundingMinutes ?? 15)
+            estimateReady = true
+        }
+        return cachedEstimate
     }
 
     func currentStatistics(_ saved: Statistics) -> Statistics {
@@ -273,6 +284,17 @@ final class AppStore: ObservableObject {
             snapshot = journal?.snapshot ?? snapshot
             Task { await refresh() }
         } catch { self.error = error.localizedDescription }
+    }
+
+    func syncNow() async {
+        if needsSignIn, let server = credential?.server {
+            await signIn(address: server.absoluteString)
+            return
+        }
+        await refresh()
+        if needsSignIn, let server = credential?.server {
+            await signIn(address: server.absoluteString)
+        }
     }
 
     func refresh() async {
@@ -367,6 +389,7 @@ final class AppStore: ObservableObject {
 
         private func openDemo() throws {
             isDemo = true
+            needsSignIn = ProcessInfo.processInfo.arguments.contains("--ui-expired-auth")
             currentDate = Date(timeIntervalSince1970: 1_790_784_000)  // 2026-09-30 16:00 UTC
             let file = FileManager.default.temporaryDirectory.appending(
                 path:

@@ -1,3 +1,5 @@
+from importlib.metadata import version
+
 import pytest
 
 
@@ -17,6 +19,7 @@ async def test_public_store_pages_need_no_login(unauthenticated_client):
         assert 'href="/support"' in response.text
     login = await unauthenticated_client.get("/login")
     assert 'href="/privacy"' in login.text
+    assert f'Tracy {version("tracy")}' in login.text
 
 
 @pytest.mark.asyncio
