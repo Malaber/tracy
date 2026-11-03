@@ -40,12 +40,12 @@ final class MarketingScreenshots: XCTestCase {
             let config = try XCTUnwrap(Bundle(for: Self.self).url(forResource: "capture-port", withExtension: "txt"))
             let port = try String(contentsOf: config, encoding: .utf8).trimmingCharacters(in: .whitespacesAndNewlines)
             let url = try XCTUnwrap(URL(string: "http://127.0.0.1:\(port)/terminate"))
-            var request = URLRequest(url: url, timeoutInterval: 30)
+            var request = URLRequest(url: url, timeoutInterval: 60)
             request.httpMethod = "POST"
-            let (_, response) = try await URLSession.shared.data(for: request)
+            let (data, response) = try await URLSession.shared.data(for: request)
             let status = (response as? HTTPURLResponse)?.statusCode
             guard status == 204 else {
-                XCTFail("Simulator termination failed: HTTP \(status ?? 0)")
+                XCTFail("Simulator termination failed: HTTP \(status ?? 0): \(String(decoding: data, as: UTF8.self))")
                 throw URLError(.badServerResponse)
             }
             XCTAssertTrue(app.wait(for: .notRunning, timeout: 10))

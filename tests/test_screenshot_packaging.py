@@ -88,14 +88,14 @@ def test_scene_termination_bridge_is_scoped_and_reports_failure(tmp_path, monkey
     bundle.mkdir(parents=True)
     calls = []
 
-    def terminate(command, **kwargs):
-        calls.append((command, kwargs))
+    def terminate(identifier):
+        calls.append(identifier)
         if failure == "exit":
-            raise subprocess.CalledProcessError(1, command)
+            raise subprocess.CalledProcessError(1, ["simctl"], stderr="service failed")
         if failure == "timeout":
-            raise subprocess.TimeoutExpired(command, kwargs["timeout"])
+            raise subprocess.TimeoutExpired(["simctl"], 20)
 
-    monkeypatch.setattr(module.subprocess, "run", terminate)
+    monkeypatch.setattr(module, "terminate_capture_app", terminate)
     server = module.start_native_capture("dedicated-simulator", tmp_path)
     try:
         base = f"http://127.0.0.1:{server.server_port}"
@@ -113,12 +113,7 @@ def test_scene_termination_bridge_is_scoped_and_reports_failure(tmp_path, monkey
             with urlopen(request, timeout=5) as response:
                 assert response.status == 204
                 assert response.read() == b""
-        assert calls == [
-            (
-                ["xcrun", "simctl", "terminate", "dedicated-simulator", "de.malaber.tracy"],
-                {"capture_output": True, "text": True, "check": True, "timeout": 20},
-            )
-        ]
+        assert calls == ["dedicated-simulator"]
     finally:
         server.shutdown()
         server.server_close()
@@ -134,3 +129,58 @@ def test_resource_diagnostic_timeout_does_not_prevent_cleanup(tmp_path, monkeypa
     path = tmp_path / "resources.log"
     module.record_host_resources(path)
     assert path.read_text().count("Resource diagnostic failed") == 4
+
+
+@pytest.mark.parametrize("failure", ["exit", "timeout"])
+@pytest.mark.parametrize("remaining", [False, True])
+def test_termination_recovers_only_exact_tracy_service(monkeypatch, failure, remaining):
+    import subprocess
+
+    label = "UIKitApplication:de.malaber.tracy[430a][rb-legacy]"
+    other = "345 0 UIKitApplication:de.malaber.tracy.uitests[abcd]\n"
+    listings = iter(
+        [
+            "PID Status Label\n" + other + (f"123 0 {label}\n" if remaining else ""),
+            "PID Status Label\n" + other,
+        ]
+    )
+    calls = []
+
+    def run(command, **kwargs):
+        calls.append(command)
+        if command[2] == "terminate":
+            if failure == "exit":
+                raise subprocess.CalledProcessError(3, command, stderr="not running")
+            raise subprocess.TimeoutExpired(command, 20)
+        if command[-1] == "list":
+            return subprocess.CompletedProcess(command, 0, stdout=next(listings))
+        return subprocess.CompletedProcess(command, 0)
+
+    monkeypatch.setattr(module.subprocess, "run", run)
+    module.terminate_capture_app("dedicated")
+    removals = [command for command in calls if "remove" in command]
+    assert removals == (
+        [["xcrun", "simctl", "spawn", "dedicated", "launchctl", "remove", label]]
+        if remaining
+        else []
+    )
+
+
+@pytest.mark.parametrize(
+    "listing",
+    [
+        "unexpected output",
+        "PID Status Label\n123 0 UIKitApplication:de.malaber.tracy[abcd]\n",
+    ],
+)
+def test_termination_does_not_report_success_without_verified_stop(monkeypatch, listing):
+    import subprocess
+
+    def run(command, **kwargs):
+        if command[2] == "terminate":
+            raise subprocess.TimeoutExpired(command, 20)
+        return subprocess.CompletedProcess(command, 0, stdout=listing)
+
+    monkeypatch.setattr(module.subprocess, "run", run)
+    with pytest.raises(RuntimeError):
+        module.terminate_capture_app("dedicated")

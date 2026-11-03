@@ -9,19 +9,7 @@ struct RootView: View {
     @AppStorage("workdayReminders") private var remindersEnabled = false
 
     var body: some View {
-        Group {
-            if store.credential == nil {
-                SignInView()
-            } else {
-                TabView(selection: $selectedTab) {
-                    TodayView(selectedTab: $selectedTab).tabItem { Label("Today", systemImage: "clock") }.tag("today")
-                    RecentDaysView().tabItem { Label("Recent Days", systemImage: "calendar") }.tag("recent")
-                    StatisticsView().tabItem { Label("Statistics", systemImage: "chart.bar") }.tag("statistics")
-                    SettingsView().tabItem { Label("Settings", systemImage: "gearshape") }.tag("settings")
-                }
-            }
-        }
-        .safeAreaInset(edge: .top) {
+        VStack(spacing: 0) {
             if store.needsSignIn {
                 HStack {
                     Label("Sign in again to sync", systemImage: "exclamationmark.icloud")
@@ -31,6 +19,18 @@ struct RootView: View {
                 }
                 .padding().background(.regularMaterial)
                 .accessibilityIdentifier("signInBanner")
+            }
+            Group {
+                if store.credential == nil {
+                    SignInView()
+                } else {
+                    TabView(selection: $selectedTab) {
+                        TodayView(selectedTab: $selectedTab).tabItem { Label("Today", systemImage: "clock") }.tag("today")
+                        RecentDaysView().tabItem { Label("Recent Days", systemImage: "calendar") }.tag("recent")
+                        StatisticsView().tabItem { Label("Statistics", systemImage: "chart.bar") }.tag("statistics")
+                        SettingsView().tabItem { Label("Settings", systemImage: "gearshape") }.tag("settings")
+                    }
+                }
             }
         }
         .task(id: store.reminderKey + String(remindersEnabled) + String(describing: scenePhase)) {

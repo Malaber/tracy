@@ -37,7 +37,13 @@ final class TracyUITests: XCTestCase {
         defer { app.terminate() }
         XCTAssertTrue(app.buttons["Sign in"].waitForExistence(timeout: 15))
         XCTAssertTrue(app.staticTexts["Sign in again to sync"].exists)
-        app.tabBars.buttons["Settings"].tap()
+        let tabs = app.buttons.matching(identifier: "Settings").allElementsBoundByIndex
+        guard let settings = tabs.first(where: { $0.isHittable }) else {
+            XCTFail("No visible Settings navigation button")
+            return
+        }
+        settings.tap()
+        XCTAssertTrue(app.buttons["appearancePicker"].waitForExistence(timeout: 10))
         XCTAssertTrue(app.buttons["Sign in"].isHittable)
         XCTAssertTrue(self.reveal(app.buttons["Sync now"], in: app))
     }

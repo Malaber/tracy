@@ -124,6 +124,53 @@ def package_device(export, destination, dimensions):
     return [found[scene] for scene in SCENES]
 
 
+def terminate_capture_app(identifier):
+    """Stop only Tracy in the dedicated simulator, including stale simctl state."""
+    try:
+        subprocess.run(
+            ["xcrun", "simctl", "terminate", identifier, "de.malaber.tracy"],
+            capture_output=True,
+            text=True,
+            check=True,
+            timeout=20,
+        )
+        return
+    except (subprocess.CalledProcessError, subprocess.TimeoutExpired) as error:
+        print(f"Tracy termination recovery: {error}; stderr={error.stderr!r}", flush=True)
+
+    def services():
+        result = subprocess.run(
+            ["xcrun", "simctl", "spawn", identifier, "launchctl", "list"],
+            capture_output=True,
+            text=True,
+            check=True,
+            timeout=5,
+        )
+        lines = result.stdout.splitlines()
+        if not lines or lines[0].split() != ["PID", "Status", "Label"]:
+            raise RuntimeError("Cannot verify simulator process list")
+        found = []
+        for line in lines[1:]:
+            fields = line.split()
+            if len(fields) == 3 and fields[2].startswith("UIKitApplication:de.malaber.tracy["):
+                found.append(fields[2])
+        return found
+
+    # simctl can report an error after the process has already exited. If the
+    # service remains, remove that exact launchd job rather than killing a PID
+    # that could have been reused. Never touch the XCTest runner or other apps.
+    for label in services():
+        subprocess.run(
+            ["xcrun", "simctl", "spawn", identifier, "launchctl", "remove", label],
+            capture_output=True,
+            text=True,
+            check=True,
+            timeout=5,
+        )
+    if services():
+        raise RuntimeError("Tracy launch service remains after termination recovery")
+
+
 def start_native_capture(identifier, stage):
     """Control the dedicated simulator for the local XCTest runner."""
 
@@ -135,18 +182,18 @@ def start_native_capture(identifier, stage):
             try:
                 # Avoid XCTest's stale-PID termination RPC on Duo. Only this
                 # capture's simulator and fixed app bundle can be terminated.
-                subprocess.run(
-                    ["xcrun", "simctl", "terminate", identifier, "de.malaber.tracy"],
-                    capture_output=True,
-                    text=True,
-                    check=True,
-                    timeout=20,
-                )
+                terminate_capture_app(identifier)
                 self.send_response(204)
                 self.send_header("Content-Length", "0")
                 self.end_headers()
-            except (subprocess.CalledProcessError, subprocess.TimeoutExpired) as error:
-                self.send_error(500, str(error))
+            except (
+                subprocess.CalledProcessError,
+                subprocess.TimeoutExpired,
+                RuntimeError,
+            ) as error:
+                detail = f"{error}; stderr={getattr(error, 'stderr', None)!r}"
+                print(f"Tracy termination failed: {detail}", flush=True)
+                self.send_error(500, detail)
 
         def do_GET(self):
             scene = self.path.removeprefix("/")

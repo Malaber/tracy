@@ -195,12 +195,22 @@ content before capturing. iPad can expose multiple hittable matches for a tab;
 do not require uniqueness. Avoid `.firstMatch`: a Duo CI spindump showed XCTest's
 lazy first-matching-snapshot traversal stalling after scrolling Statistics.
 
+Test global banners with top-mounted tabs too. A safe-area inset attached outside
+TabView covered iPad navigation when authentication expired. Give the banner its
+own layout space above TabView, and assert that selecting Settings actually shows
+Settings content while the banner remains visible.
+
 Separate scene transitions from final cleanup. Before relaunching a screenshot
 fixture, activate SpringBoard and wait for it to reach the foreground. Request
 termination through the local capture bridge using `simctl terminate`, then verify
 `.notRunning` in XCTest before launching again. The bridge is bound to loopback,
-accepts only the fixed app on its dedicated simulator, and fails on command errors
-or a 20-second timeout. Backgrounding alone did not prevent XCTest from failing
+accepts only the fixed app on its dedicated simulator. If termination errors or
+times out after 20 seconds, inspect that simulator's launchd services. An absent
+Tracy service means it already stopped; otherwise remove only the exact
+`UIKitApplication:de.malaber.tracy[...]` service and verify its absence. Never use
+a host-wide kill or a remembered PID. Unknown process-list output, failed recovery,
+or a remaining service must still fail the capture. Include stderr in both the
+host log and XCTest HTTP error. Backgrounding alone did not prevent XCTest from failing
 with a `Failed to terminate ...:0` error during scene transitions on CI; avoid
 that termination RPC. Do not terminate again after the last capture:
 the capture script owns the dedicated simulator and deletes it in `finally`.
