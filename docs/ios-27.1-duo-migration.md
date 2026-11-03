@@ -154,6 +154,14 @@ Add UI
 assertions for important transitions and run VoiceOver/accessibility audits with
 large text separately from normal-size marketing screenshots.
 
+Avoid deferred app termination at test-case exit. An iPad hit-region audit passed,
+then its redundant `terminate()` failed with a stale-PID error. Each scenario must
+still call [`launch()`](https://developer.apple.com/documentation/xcuiautomation/xcuiapplication/launch()),
+which replaces an existing instance and reports launch failures. Keep explicit
+termination where persistence or a within-test fixture relaunch is being tested;
+do not suppress termination errors or retry failed audits into passing results.
+The CI job removes its dedicated simulator after the suite.
+
 For persistence tests, wait for editor dismissal before backgrounding and terminating
 the app. Activate SpringBoard explicitly and wait for it to become foreground;
 the Home-button event alone does not reliably change Duo foreground state.
