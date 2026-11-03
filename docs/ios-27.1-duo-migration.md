@@ -200,22 +200,25 @@ TabView covered iPad navigation when authentication expired. Give the banner its
 own layout space above TabView, and assert that selecting Settings actually shows
 Settings content while the banner remains visible.
 
-Separate scene transitions from final cleanup. Before relaunching a screenshot
-fixture, activate SpringBoard and wait for it to reach the foreground. Request
-termination through the local capture bridge using `simctl terminate`, then verify
-`.notRunning` in XCTest before launching again. The bridge is bound to loopback,
-accepts only the fixed app on its dedicated simulator. If termination errors or
-times out after 20 seconds, inspect that simulator's launchd services. An absent
-Tracy service means it already stopped; otherwise remove only the exact
-`UIKitApplication:de.malaber.tracy[...]` service and verify its absence. Never use
-a host-wide kill or a remembered PID. Unknown process-list output, failed recovery,
-or a remaining service must still fail the capture. Include stderr in both the
-host log and XCTest HTTP error. Backgrounding alone did not prevent XCTest from failing
-with a `Failed to terminate ...:0` error during scene transitions on CI; avoid
-that termination RPC. Do not terminate again after the last capture:
-the capture script owns the dedicated simulator and deletes it in `finally`.
-A Duo run captured all ten images successfully but failed solely on that redundant
-final XCTest termination RPC.
+Capture all marketing scenes in one app launch. Change appearance through Settings,
+check out through the real action, and clear the demo entry through its editor.
+Assert each resulting state before capturing it. When clearing an entry through
+the UI, remove its breaks before its times, verify each switch value changes, and
+wait for Save to dismiss the editor; a tappable button does not prove a valid save. Do not restart the app between
+scenes: both XCTest termination and host-side simctl termination have stalled on
+Duo CI; even the launchctl fallback timed out. A second termination mechanism
+does not remove dependence on the same busy simulator service. Keep process
+cleanup outside XCTest: the capture task deletes its dedicated simulator in
+finally. Reset Today scroll positions explicitly after navigating between tabs;
+a control behind a translucent toolbar may still report itself as hittable.
+Do not pin appearance in launch arguments when a single-launch test later changes
+it through Settings: the UserDefaults argument domain overrides the saved choice.
+Start a fresh light simulator and select Dark through the app. Packaging checks
+that the light and dark Today captures have a substantial luminance difference.
+
+The Duo transition sequence returns to the inner display and restores landscape
+before later captures. Form rows are virtualized: reveal Notes again after each
+fold before reading its value, while still asserting that the draft survives.
 
 Scope confirmation-dialog actions to the presented sheet or popover. On iPad,
 cancel by dismissing outside the confirmation popover and verify both dismissal
