@@ -9,15 +9,27 @@ struct RootView: View {
     @AppStorage("workdayReminders") private var remindersEnabled = false
 
     var body: some View {
-        Group {
-            if store.credential == nil {
-                SignInView()
-            } else {
-                TabView(selection: $selectedTab) {
-                    TodayView(selectedTab: $selectedTab).tabItem { Label("Today", systemImage: "clock") }.tag("today")
-                    RecentDaysView().tabItem { Label("Recent Days", systemImage: "calendar") }.tag("recent")
-                    StatisticsView().tabItem { Label("Statistics", systemImage: "chart.bar") }.tag("statistics")
-                    SettingsView().tabItem { Label("Settings", systemImage: "gearshape") }.tag("settings")
+        VStack(spacing: 0) {
+            if store.needsSignIn {
+                HStack {
+                    Label("Sign in again to sync", systemImage: "exclamationmark.icloud")
+                        .font(.subheadline)
+                    Spacer()
+                    Button("Sign in") { Task { await store.syncNow() } }
+                }
+                .padding().background(.regularMaterial)
+                .accessibilityIdentifier("signInBanner")
+            }
+            Group {
+                if store.credential == nil {
+                    SignInView()
+                } else {
+                    TabView(selection: $selectedTab) {
+                        TodayView(selectedTab: $selectedTab).tabItem { Label("Today", systemImage: "clock") }.tag("today")
+                        RecentDaysView().tabItem { Label("Recent Days", systemImage: "calendar") }.tag("recent")
+                        StatisticsView().tabItem { Label("Statistics", systemImage: "chart.bar") }.tag("statistics")
+                        SettingsView().tabItem { Label("Settings", systemImage: "gearshape") }.tag("settings")
+                    }
                 }
             }
         }
@@ -66,7 +78,7 @@ struct SyncStatus: View {
             ? "\(store.pendingCount) \(store.pendingCount == 1 ? "day" : "days") waiting to sync" : "Saved data"
     }
     var body: some View {
-        if store.pendingCount > 0 || store.notice != nil || store.isSyncing {
+        if store.needsSignIn || store.pendingCount > 0 || store.notice != nil || store.isSyncing {
             Section {
                 VStack(alignment: .leading, spacing: 8) {
                     Label(
@@ -81,7 +93,7 @@ struct SyncStatus: View {
                         Text(notice).font(.subheadline).foregroundStyle(Color.primary)
                     }
                     if store.needsSignIn {
-                        Text("Open Settings to sign in again.").font(.subheadline)
+                        Button("Sign in again") { Task { await store.syncNow() } }
                     } else {
                         Button("Retry sync") { Task { await store.refresh() } }.disabled(store.isSyncing)
                     }
@@ -94,6 +106,7 @@ struct SyncStatus: View {
 }
 
 struct TodayView: View {
+    @Environment(\.colorScheme) private var colorScheme
     @Binding var selectedTab: String
     @EnvironmentObject private var store: AppStore
     @Environment(\.horizontalSizeClass) private var widthClass
@@ -181,7 +194,23 @@ struct TodayView: View {
             .listRowInsets(EdgeInsets(top: 0, leading: 4, bottom: 0, trailing: 4))
     }
 
-    private var heroSection: some View {
+    @ViewBuilder private var heroSection: some View {
+        if entry.isDayOff {
+            Section {
+                VStack(spacing: 16) {
+                    Image(systemName: "sun.horizon").font(.largeTitle).foregroundStyle(Color("AccentColor"))
+                    Text("TIME OFF").font(.caption.weight(.semibold)).foregroundStyle(.secondary)
+                    Text("Vacation day").font(.largeTitle.bold())
+                    Text("Enjoy your day off.").foregroundStyle(.secondary)
+                    Divider()
+                    Text("Daily goal paused").font(.headline)
+                }.frame(maxWidth: .infinity).padding(.vertical, 24)
+                    .accessibilityIdentifier("vacationHero")
+            }
+        } else { workingHero }
+    }
+
+    private var workingHero: some View {
         Section {
             VStack(alignment: .leading, spacing: 20) {
                 ViewThatFits(in: .horizontal) {
@@ -286,36 +315,34 @@ struct TodayView: View {
     }
 
     private var quickAction: some View {
-        let layout = typeSize.isAccessibilitySize
-            ? AnyLayout(VStackLayout(spacing: 8)) : AnyLayout(HStackLayout(spacing: 8))
-        return layout {
+        HStack(spacing: 0) {
             Button { store.quickAction(checkOut: active) } label: {
-                Group {
-                    if typeSize.isAccessibilitySize {
-                        actionTitle
-                    } else {
-                        Label { actionTitle } icon: { Image(systemName: active ? "stop.fill" : "play.fill") }
-                    }
-                }
-                .font(.headline).frame(maxWidth: .infinity).padding(.vertical, 8)
+                Label { actionTitle } icon: { Image(systemName: active ? "stop.fill" : "play.fill") }
+                    .font(.headline).frame(maxWidth: .infinity, minHeight: 52)
+                    .padding(.horizontal, 12).contentShape(Rectangle())
             }.accessibilityIdentifier("quickAction")
+            Rectangle().fill((colorScheme == .dark ? Color.black : Color.white).opacity(0.3)).frame(width: 1, height: 28).accessibilityHidden(true)
             Button { showSessionAction = true } label: {
-                HStack {
-                    if typeSize.isAccessibilitySize { Text("Project and time options").fixedSize(horizontal: false, vertical: true) }
-                    Image(systemName: "chevron.down")
-                }
-                .frame(minWidth: 28, minHeight: 44)
-                .frame(maxWidth: typeSize.isAccessibilitySize ? .infinity : nil)
+                Image(systemName: "chevron.down").font(.headline)
+                    .frame(width: 56).frame(maxHeight: .infinity).contentShape(Rectangle())
             }
             .accessibilityLabel(active ? "Checkout project and time options" : "Check-in project and time options")
             .accessibilityIdentifier("sessionActionOptions")
         }
-        .modifier(PrimaryActionStyle())
+        .fixedSize(horizontal: false, vertical: true)
+        .buttonStyle(.plain)
+        .foregroundStyle(colorScheme == .dark ? Color.black : Color.white)
+        .background(Color("AccentColor"), in: Capsule())
+        .clipShape(Capsule())
     }
 
     private var detailsSection: some View {
         Section {
-            if !started {
+            if entry.isDayOff {
+                Button { showVacation = true } label: {
+                    Label("Vacation · All day", systemImage: "calendar")
+                }
+            } else if !started {
                 ContentUnavailableView("No entries yet", systemImage: "doc.badge.clock",
                                        description: Text("Check in to start tracking your working time."))
             } else {
@@ -336,7 +363,7 @@ struct TodayView: View {
 
     private var actionsSection: some View {
         Section {
-            if started && !active {
+            if started && !active && !entry.isDayOff {
                 quickAction
                 Button { store.reopenToday(recordGap: false) } label: { ActionRow(title: "Undo checkout", symbol: "arrow.uturn.backward") }
                     .accessibilityIdentifier("undoCheckout")

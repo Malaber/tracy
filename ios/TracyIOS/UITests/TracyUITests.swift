@@ -1,6 +1,10 @@
 import XCTest
 
 final class TracyUITests: XCTestCase {
+    // Each scenario calls launch(), which replaces any existing app instance.
+    // Do not add deferred terminate() cleanup: after accessibility audits,
+    // XCTest can retain a stale PID and fail an otherwise successful test.
+    // Explicit termination remains only where relaunch/persistence is tested.
     private var testArguments: [String] {
         [
             "--ui-testing", "-AppleLanguages", "(en)", "-AppleLocale", "en_US",
@@ -30,11 +34,28 @@ final class TracyUITests: XCTestCase {
     }
 
     @MainActor
+    func testExpiredAuthenticationIsVisibleAcrossTabs() {
+        let app = XCUIApplication()
+        app.launchArguments = testArguments + ["--ui-expired-auth"]
+        app.launch()
+        XCTAssertTrue(app.buttons["Sign in"].waitForExistence(timeout: 15))
+        XCTAssertTrue(app.staticTexts["Sign in again to sync"].exists)
+        let tabs = app.buttons.matching(identifier: "Settings").allElementsBoundByIndex
+        guard let settings = tabs.first(where: { $0.isHittable }) else {
+            XCTFail("No visible Settings navigation button")
+            return
+        }
+        settings.tap()
+        XCTAssertTrue(app.buttons["appearancePicker"].waitForExistence(timeout: 10))
+        XCTAssertTrue(app.buttons["Sign in"].isHittable)
+        XCTAssertTrue(self.reveal(app.buttons["Sync now"], in: app))
+    }
+
+    @MainActor
     func testEmptyDayHierarchy() {
         let app = XCUIApplication()
         app.launchArguments = testArguments + ["--ui-empty-day"]
         app.launch()
-        defer { app.terminate() }
         XCTAssertTrue(self.reveal(app.staticTexts["No entries yet"], in: app))
         XCTAssertTrue(self.reveal(app.buttons["quickAction"], in: app))
         XCTAssertEqual(app.buttons["quickAction"].label, "Check in now")
@@ -46,7 +67,6 @@ final class TracyUITests: XCTestCase {
         let app = XCUIApplication()
         app.launchArguments = testArguments + ["--ui-completed-day"]
         app.launch()
-        defer { app.terminate() }
         XCTAssertTrue(app.staticTexts["workingStatus"].waitForExistence(timeout: 15))
         XCTAssertTrue(app.staticTexts["heroBreaks"].label.contains("0h 30m"))
         XCTAssertTrue(self.reveal(app.staticTexts["Goal exceeded by 1h 0m"], in: app))
@@ -63,7 +83,6 @@ final class TracyUITests: XCTestCase {
         let app = XCUIApplication()
         app.launchArguments = testArguments
         app.launch()
-        defer { app.terminate() }
         XCTAssertTrue(app.buttons["Statistics"].firstMatch.waitForExistence(timeout: 15))
         app.buttons["Statistics"].firstMatch.tap()
         app.buttons["Month"].tap()
@@ -144,7 +163,6 @@ final class TracyUITests: XCTestCase {
         let app = XCUIApplication()
         app.launchArguments = testArguments + ["--ui-layout-checks", "--ui-clipping-negative-control"]
         app.launch()
-        defer { app.terminate() }
         let text = app.descendants(matching: .any).matching(identifier: "layout.negative").firstMatch
         guard text.waitForExistence(timeout: 15) else {
             XCTFail("Missing clipping negative control. \(app.debugDescription)")
@@ -167,7 +185,6 @@ final class TracyUITests: XCTestCase {
         app.launchArguments = testArguments + ["--ui-layout-checks", "-appearance", appearance]
         if largeText { app.launchArguments += ["-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryAccessibilityXXXL"] }
         app.launch()
-        defer { app.terminate() }
         for key in [
             "date", "billable", "headline", "breaks", "action", "section", "label.Check-in", "value.Check-in",
             "label.Check-out", "value.Check-out", "edit", "review",
@@ -199,7 +216,6 @@ final class TracyUITests: XCTestCase {
         app.launchArguments = testArguments + ["-appearance", appearance]
         if negativeControl { app.launchArguments.append("--ui-contrast-negative-control") }
         app.launch()
-        defer { app.terminate() }
         XCTAssertTrue(app.staticTexts["heroBillable"].waitForExistence(timeout: 15))
         // Application screenshots resolve an accessibility snapshot. After an audit the
         // hosted iPad service can stop answering those queries. Screen capture does not
@@ -343,23 +359,27 @@ final class TracyUITests: XCTestCase {
         app.launch()
         XCTAssertTrue(self.reveal(app.buttons["editToday"], in: app))
         app.buttons["editToday"].tap()
-        let form = app.descendants(matching: .any).matching(identifier: "entryForm").firstMatch
+        let form = app.collectionViews["entryForm"]
         XCTAssertTrue(form.waitForExistence(timeout: 15))
-        // SwiftUI's multiline field can expose TextField or TextView across OS versions.
-        let notes = app.descendants(matching: .any).matching(identifier: "entryNotes").firstMatch
-        // Scroll only the editor, and only until the target is visible. The iPad sheet
-        // doesn't cover the whole app, so a full-application swipe can hit its backdrop.
+        // Query only concrete text-input types inside the editor. A whole-app
+        // .any.firstMatch query for an offscreen Notes row hung XCTest's
+        // snapshot evaluator on iPad CI. Enumerating typed snapshots also
+        // handles SwiftUI exposing this multiline field as TextView.
+        func visibleNotes() -> XCUIElement? {
+            (form.textFields.allElementsBoundByIndex + form.textViews.allElementsBoundByIndex)
+                .first { $0.identifier == "entryNotes" && $0.isHittable }
+        }
+        var notesField = visibleNotes()
         for _ in 0..<6 {
-            if notes.exists && notes.isHittable { break }
+            if notesField != nil { break }
             form.swipeUp()
+            notesField = visibleNotes()
         }
-        guard notes.waitForExistence(timeout: 15), notes.isHittable else {
-            XCTFail("Notes control did not become visible inside the editor")
-            return
-        }
+        let notes = try XCTUnwrap(notesField, "Notes control did not become visible inside the editor")
         notes.tap()
         notes.typeText("Offline project notes")
         app.buttons["saveEntry"].tap()
+        XCTAssertTrue(form.waitForNonExistence(timeout: 10))
         XCTAssertTrue(self.reveal(app.staticTexts["Offline project notes"], in: app))
         for _ in 0..<6 {
             if app.staticTexts["1 day waiting to sync"].exists { break }
@@ -384,12 +404,15 @@ final class TracyUITests: XCTestCase {
         app.launchArguments = testArguments
         app.launchEnvironment["TRACY_UI_JOURNAL"] = UUID().uuidString
         app.launch()
-        defer { app.terminate() }
         XCTAssertTrue(app.staticTexts["heroBillable"].waitForExistence(timeout: 15))
         XCTAssertTrue(app.staticTexts["heroBreaks"].label.contains("breaks deducted"))
         app.buttons["quickAction"].tap()
         XCTAssertTrue(self.reveal(app.buttons["quickAction"], in: app))
         XCTAssertEqual(app.buttons["quickAction"].label, "Check in again")
+        let primary = app.buttons["quickAction"].frame
+        let options = app.buttons["sessionActionOptions"].frame
+        XCTAssertEqual(primary.height, options.height, accuracy: 1)
+        XCTAssertLessThanOrEqual(abs(primary.maxX - options.minX), 2)
         app.buttons["sessionActionOptions"].tap()
         XCTAssertTrue(app.buttons["saveSessionAction"].waitForExistence(timeout: 10))
         app.buttons["Cancel"].tap()
@@ -405,7 +428,6 @@ final class TracyUITests: XCTestCase {
         app.launchArguments = testArguments
         app.launchEnvironment["TRACY_UI_JOURNAL"] = UUID().uuidString
         app.launch()
-        defer { app.terminate() }
         func relaunchPersistedEntry() {
             // Finish the sheet transition before ending the process. Backgrounding
             // lets SpringBoard detach its accessibility session before termination.
@@ -507,7 +529,6 @@ final class TracyUITests: XCTestCase {
         app.launchArguments = testArguments + ["--ui-projects"]
         app.launchEnvironment["TRACY_UI_JOURNAL"] = UUID().uuidString
         app.launch()
-        defer { app.terminate() }
         XCTAssertTrue(self.reveal(app.buttons["editToday"], in: app))
         app.buttons["editToday"].tap()
         let form = app.descendants(matching: .any).matching(identifier: "entryForm").firstMatch
@@ -547,11 +568,13 @@ final class TracyUITests: XCTestCase {
         let app = XCUIApplication()
         app.launchArguments = testArguments
         app.launch()
-        defer { app.terminate() }
         XCTAssertTrue(app.buttons["manageVacation"].waitForExistence(timeout: 15))
         app.buttons["manageVacation"].tap()
         XCTAssertTrue(app.buttons["saveVacation"].waitForExistence(timeout: 10))
         app.buttons["saveVacation"].tap()
+        XCTAssertTrue(app.staticTexts["Vacation day"].waitForExistence(timeout: 10))
+        XCTAssertTrue(app.staticTexts["Daily goal paused"].exists)
+        XCTAssertFalse(app.buttons["quickAction"].exists)
         XCTAssertTrue(self.reveal(app.buttons["editToday"], in: app))
         app.buttons["editToday"].tap()
         XCTAssertTrue(app.buttons["entryVacation"].waitForExistence(timeout: 10))
@@ -567,7 +590,6 @@ final class TracyUITests: XCTestCase {
         app.launchArguments = testArguments + ["--ui-notification-checkout"]
         app.launchEnvironment["TRACY_UI_JOURNAL"] = UUID().uuidString
         app.launch()
-        defer { app.terminate() }
         XCTAssertTrue(app.buttons["applyActualCheckout"].waitForExistence(timeout: 15))
         app.buttons["applyActualCheckout"].tap()
         app.buttons["saveEntry"].tap()
@@ -580,7 +602,6 @@ final class TracyUITests: XCTestCase {
         app.launchArguments = testArguments + ["--ui-projects", "--ui-sessions"]
         app.launchEnvironment["TRACY_UI_JOURNAL"] = UUID().uuidString
         app.launch()
-        defer { app.terminate() }
         XCTAssertTrue(self.reveal(app.buttons["sessionActionOptions"], in: app))
         app.buttons["sessionActionOptions"].tap()
         XCTAssertTrue(app.buttons["saveSessionAction"].waitForExistence(timeout: 10))

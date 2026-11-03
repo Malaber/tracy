@@ -488,3 +488,14 @@ td strong { font-weight: 760; }
 #sessionSection > p { color:var(--muted); font-size:13px; line-height:1.5; }
 #sessionActionError:empty { display:none; }
 #sessionActionDialog { max-height:calc(100dvh - 32px); overflow:auto; color:var(--ink); }
+
+.public-links { max-width: 1200px; margin: 2rem auto 0; padding: 1.25rem 1.5rem; display: flex; flex-wrap: wrap; align-items: center; gap: 1.25rem; border-top: 1px solid var(--border, #dce1ea); font-size: .875rem; color: #667085; }
+.public-links a { color: inherit; text-decoration: none; padding: .5rem 0; }
+.public-links a:hover { text-decoration: underline; }
+.public-links .app-version { margin-right: auto; }
+.project-totals-card { padding: 1.5rem; margin-bottom: 1.5rem; }
+.project-totals-card h2 { margin: 0 0 .35rem; }
+.project-totals-card > p { margin: 0 0 1rem; color: #667085; font-size: .875rem; }
+.project-total-row { display: flex; justify-content: space-between; align-items: baseline; gap: 1rem; padding: .85rem 0; border-top: 1px solid #e8ebf0; }
+.project-total-row span { overflow-wrap: anywhere; }
+.project-total-row strong { white-space: nowrap; font-variant-numeric: tabular-nums; }

@@ -159,6 +159,7 @@ jobs:
           image = os.environ["IMAGE"]
           version = os.environ["RELEASE_VERSION"]
           notes += f"\n\n## Container image\n\n- `{image}:{version}`\n- `{image}:latest`"
+          notes += "\n\n## iOS screenshots\n\nDownload the per-device screenshot ZIPs from the release Assets below (iPhone, iPad, and both iPhone Duo displays). They are attached automatically after screenshot validation completes."
           Path("release-notes.md").write_text(f"{notes}\n", encoding="utf-8")
           PY
       - name: Create or update GitHub release

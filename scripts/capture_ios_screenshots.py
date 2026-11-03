@@ -13,7 +13,7 @@ import tempfile
 import sys
 import zipfile
 
-from PIL import Image
+from PIL import Image, ImageStat
 
 ROOT = Path(__file__).resolve().parents[1]
 IOS = ROOT / "ios/TracyIOS"
@@ -121,6 +121,14 @@ def package_device(export, destination, dimensions):
             }
     if set(found) != set(SCENES):
         raise ValueError(f"Missing screenshots: {set(SCENES) - set(found)}")
+    # Both scenes show Today. Check a broad luminance difference rather than
+    # exact pixels so OS typography/layout changes do not invalidate captures.
+    luminance = {}
+    for scene in ("01-today", "05-dark"):
+        with Image.open(destination / f"{scene}.png") as image:
+            luminance[scene] = ImageStat.Stat(image.convert("L")).mean[0]
+    if luminance["01-today"] - luminance["05-dark"] < 40:
+        raise ValueError("Light and dark Today captures do not show distinct appearances")
     return [found[scene] for scene in SCENES]
 
 
@@ -128,26 +136,6 @@ def start_native_capture(identifier, stage):
     """Control the dedicated simulator for the local XCTest runner."""
 
     class CaptureHandler(BaseHTTPRequestHandler):
-        def do_POST(self):
-            if self.path != "/terminate":
-                self.send_error(404)
-                return
-            try:
-                # Avoid XCTest's stale-PID termination RPC on Duo. Only this
-                # capture's simulator and fixed app bundle can be terminated.
-                subprocess.run(
-                    ["xcrun", "simctl", "terminate", identifier, "de.malaber.tracy"],
-                    capture_output=True,
-                    text=True,
-                    check=True,
-                    timeout=20,
-                )
-                self.send_response(204)
-                self.send_header("Content-Length", "0")
-                self.end_headers()
-            except (subprocess.CalledProcessError, subprocess.TimeoutExpired) as error:
-                self.send_error(500, str(error))
-
         def do_GET(self):
             scene = self.path.removeprefix("/")
             if scene in {"pose/0", "pose/90", "pose/180"}:

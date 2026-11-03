@@ -2,6 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="utf-8">
+  {% include "smart_app_banner.html" %}
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="theme-color" content="#172554">
   <title>{% block title %}{{ app_name }}{% endblock %}</title>
@@ -30,6 +31,6 @@
     import { initFastPasskey } from "/api/v1/auth/assets/fastpasskey.js";
     initFastPasskey();
   </script>
-<footer class="public-links"><a href="/app">iOS app</a> · <a href="/support">Support</a> · <a href="/privacy">Privacy</a></footer>
+<footer class="public-links"><span class="app-version">Tracy {{ app_version }}</span><a href="/app">iOS app</a><a href="/support">Support</a><a href="/privacy">Privacy</a></footer>
 </body>
 </html>

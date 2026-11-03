@@ -154,11 +154,23 @@ Add UI
 assertions for important transitions and run VoiceOver/accessibility audits with
 large text separately from normal-size marketing screenshots.
 
+Avoid deferred app termination at test-case exit. An iPad hit-region audit passed,
+then its redundant `terminate()` failed with a stale-PID error. Each scenario must
+still call [`launch()`](https://developer.apple.com/documentation/xcuiautomation/xcuiapplication/launch()),
+which replaces an existing instance and reports launch failures. Keep explicit
+termination where persistence or a within-test fixture relaunch is being tested;
+do not suppress termination errors or retry failed audits into passing results.
+The CI job removes its dedicated simulator after the suite.
+
 For persistence tests, wait for editor dismissal before backgrounding and terminating
 the app. Activate SpringBoard explicitly and wait for it to become foreground;
 the Home-button event alone does not reliably change Duo foreground state.
 After relaunch, wait for visible app content before querying
-navigation. Prefer typed queries over whole-tree `.any` lookups. For adaptive containers,
+navigation. Prefer typed queries over whole-tree `.any` lookups. For multiline
+editor fields, enumerate TextField and TextView snapshots scoped to the editor
+collection, then scroll that collection until the identified field is hittable.
+A whole-app Notes query hung the iPad snapshot evaluator for four minutes even
+though the editor had opened correctly. For adaptive containers,
 enumerate existing lists instead of asking whether a named split column's
 `firstMatch` exists: that column is absent on compact Duo, and even a typed exact
 identifier query stalled the CI accessibility service. Return immediately when the
@@ -195,17 +207,30 @@ content before capturing. iPad can expose multiple hittable matches for a tab;
 do not require uniqueness. Avoid `.firstMatch`: a Duo CI spindump showed XCTest's
 lazy first-matching-snapshot traversal stalling after scrolling Statistics.
 
-Separate scene transitions from final cleanup. Before relaunching a screenshot
-fixture, activate SpringBoard and wait for it to reach the foreground. Request
-termination through the local capture bridge using `simctl terminate`, then verify
-`.notRunning` in XCTest before launching again. The bridge is bound to loopback,
-accepts only the fixed app on its dedicated simulator, and fails on command errors
-or a 20-second timeout. Backgrounding alone did not prevent XCTest from failing
-with a `Failed to terminate ...:0` error during scene transitions on CI; avoid
-that termination RPC. Do not terminate again after the last capture:
-the capture script owns the dedicated simulator and deletes it in `finally`.
-A Duo run captured all ten images successfully but failed solely on that redundant
-final XCTest termination RPC.
+Test global banners with top-mounted tabs too. A safe-area inset attached outside
+TabView covered iPad navigation when authentication expired. Give the banner its
+own layout space above TabView, and assert that selecting Settings actually shows
+Settings content while the banner remains visible.
+
+Capture all marketing scenes in one app launch. Change appearance through Settings,
+check out through the real action, and clear the demo entry through its editor.
+Assert each resulting state before capturing it. When clearing an entry through
+the UI, remove its breaks before its times, verify each switch value changes, and
+wait for Save to dismiss the editor; a tappable button does not prove a valid save. Do not restart the app between
+scenes: both XCTest termination and host-side simctl termination have stalled on
+Duo CI; even the launchctl fallback timed out. A second termination mechanism
+does not remove dependence on the same busy simulator service. Keep process
+cleanup outside XCTest: the capture task deletes its dedicated simulator in
+finally. Reset Today scroll positions explicitly after navigating between tabs;
+a control behind a translucent toolbar may still report itself as hittable.
+Do not pin appearance in launch arguments when a single-launch test later changes
+it through Settings: the UserDefaults argument domain overrides the saved choice.
+Start a fresh light simulator and select Dark through the app. Packaging checks
+that the light and dark Today captures have a substantial luminance difference.
+
+The Duo transition sequence returns to the inner display and restores landscape
+before later captures. Form rows are virtualized: reveal Notes again after each
+fold before reading its value, while still asserting that the draft survives.
 
 Scope confirmation-dialog actions to the presented sheet or popover. On iPad,
 cancel by dismissing outside the confirmation popover and verify both dismissal

@@ -42,7 +42,7 @@ jobs:
       - run: python3 scripts/ensure_ios_runtimes.py 27.0 27.1
       - run: brew install xcodegen
       - run: .codex/setup.sh --ios
-      - run: .venv/bin/pip install --retries 0 Pillow==12.1.1
+      - run: .venv/bin/pip install --retries 0 Pillow==13.0.0
       - name: Capture one device
         timeout-minutes: 25
         run: .venv/bin/inv capture-ios-screenshots --device=${{ matrix.device }}

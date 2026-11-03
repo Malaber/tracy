@@ -520,3 +520,12 @@ private actor MockServer: EntrySyncService {
     let reopened = statistics.projecting(SignOffEstimate(exactMinutes: 300, billableMinutes: 300, breakMinutes: 0), date: "2026-10-26")
     #expect(reopened.monthForecast(today: "2026-10-26").billableMinutes == 1560)
 }
+
+@Test func dateOnlyFormattingPreservesCalendarDay() {
+    for key in ["2026-11-02", "2024-02-29", "2026-12-31"] {
+        #expect(Clock.day(Clock.date(key), timezone: "UTC") == key)
+        #expect(!Clock.title(key).isEmpty)
+    }
+    #expect(Clock.date("2026-02-30") == .distantPast)
+    #expect(Clock.date("not-a-date") == .distantPast)
+}
