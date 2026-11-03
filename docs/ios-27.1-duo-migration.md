@@ -158,7 +158,11 @@ For persistence tests, wait for editor dismissal before backgrounding and termin
 the app. Activate SpringBoard explicitly and wait for it to become foreground;
 the Home-button event alone does not reliably change Duo foreground state.
 After relaunch, wait for visible app content before querying
-navigation. Prefer typed queries over whole-tree `.any` lookups. For adaptive containers,
+navigation. Prefer typed queries over whole-tree `.any` lookups. For multiline
+editor fields, enumerate TextField and TextView snapshots scoped to the editor
+collection, then scroll that collection until the identified field is hittable.
+A whole-app Notes query hung the iPad snapshot evaluator for four minutes even
+though the editor had opened correctly. For adaptive containers,
 enumerate existing lists instead of asking whether a named split column's
 `firstMatch` exists: that column is absent on compact Duo, and even a typed exact
 identifier query stalled the CI accessibility service. Return immediately when the

@@ -362,23 +362,27 @@ final class TracyUITests: XCTestCase {
         app.launch()
         XCTAssertTrue(self.reveal(app.buttons["editToday"], in: app))
         app.buttons["editToday"].tap()
-        let form = app.descendants(matching: .any).matching(identifier: "entryForm").firstMatch
+        let form = app.collectionViews["entryForm"]
         XCTAssertTrue(form.waitForExistence(timeout: 15))
-        // SwiftUI's multiline field can expose TextField or TextView across OS versions.
-        let notes = app.descendants(matching: .any).matching(identifier: "entryNotes").firstMatch
-        // Scroll only the editor, and only until the target is visible. The iPad sheet
-        // doesn't cover the whole app, so a full-application swipe can hit its backdrop.
+        // Query only concrete text-input types inside the editor. A whole-app
+        // .any.firstMatch query for an offscreen Notes row hung XCTest's
+        // snapshot evaluator on iPad CI. Enumerating typed snapshots also
+        // handles SwiftUI exposing this multiline field as TextView.
+        func visibleNotes() -> XCUIElement? {
+            (form.textFields.allElementsBoundByIndex + form.textViews.allElementsBoundByIndex)
+                .first { $0.identifier == "entryNotes" && $0.isHittable }
+        }
+        var notesField = visibleNotes()
         for _ in 0..<6 {
-            if notes.exists && notes.isHittable { break }
+            if notesField != nil { break }
             form.swipeUp()
+            notesField = visibleNotes()
         }
-        guard notes.waitForExistence(timeout: 15), notes.isHittable else {
-            XCTFail("Notes control did not become visible inside the editor")
-            return
-        }
+        let notes = try XCTUnwrap(notesField, "Notes control did not become visible inside the editor")
         notes.tap()
         notes.typeText("Offline project notes")
         app.buttons["saveEntry"].tap()
+        XCTAssertTrue(form.waitForNonExistence(timeout: 10))
         XCTAssertTrue(self.reveal(app.staticTexts["Offline project notes"], in: app))
         for _ in 0..<6 {
             if app.staticTexts["1 day waiting to sync"].exists { break }
