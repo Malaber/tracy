@@ -77,6 +77,8 @@ async function main() {
     ]);
     await page.getByRole("heading", { name: "Track your working day" }).waitFor();
 
+    assert.equal(await page.locator('meta[name="apple-itunes-app"]').getAttribute("content"), "app-id=6817695924");
+
     log("Saving protected tracker data");
     await page.locator("#checkIn").fill("08:00");
     await page.locator("#checkOut").fill("09:00");

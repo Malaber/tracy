@@ -37,3 +37,16 @@ def test_webhooker_bundle_matches_published_image_contract():
         assert 'SECURE_COOKIES: "true"' in compose
     assert "WEBHOOKER_REVIEW_WAKE_URL" in review_workflow
     assert "pr-${{ github.event.pull_request.number }}.pr.tracy.malaber.de" in review_workflow
+
+
+def test_release_attaches_validated_screenshots_to_its_own_tag():
+    release = Path(".github/workflows/release.yml").read_text()
+    screenshots = Path(".github/workflows/app-store-screenshots.yml").read_text()
+    assert "needs: [version, release]" in release
+    assert "ref: ${{ needs.version.outputs.git_tag }}" in release
+    assert "needs: [version, screenshots]" in release
+    assert "name: tracy-app-store-screenshots" in release
+    assert "RELEASE_TAG: ${{ needs.version.outputs.git_tag }}" in release
+    assert 'gh release upload "$RELEASE_TAG" screenshots/*.zip --clobber' in release
+    assert "## iOS screenshots" in release
+    assert "if-no-files-found: error" in screenshots
