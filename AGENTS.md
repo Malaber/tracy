@@ -17,6 +17,21 @@ commands whenever an Invoke task exists.
 New calculation, API, or UI behavior should include focused automated coverage. Keep the local
 SQLite database out of version control and use a temporary database for tests.
 
+### Quiet test execution
+
+Run local tests once and wait for completion. Use a blocking process wait or a tool-level
+completion wait; do not repeatedly inspect logs, query test progress, or narrate unchanged
+status. Save output to a log and inspect the exit status and results after completion.
+Report the final result, or an actionable failure that requires intervention.
+
+Do not poll GitHub CI. Check results when requested, fix reported failures, and return
+after pushing rather than waiting on repeated status queries.
+
+For changes limited to `AGENTS.md`, skip local setup and tests. Include `[skip ci]` in
+the commit message to skip push and pull-request workflows for that documentation-only
+change. GitHub may leave required checks pending; do not weaken branch protection to
+bypass them.
+
 Use Xcode 27.1 and the iOS 27.1 SDK for all new native development. Keep the iOS 27.0
 simulator runtime for ordinary iPhone/iPad testing until newer runtimes support those device types.
 See [Duo migration guide](docs/ios-27.1-duo-migration.md) for the pinned runtime matrix.
